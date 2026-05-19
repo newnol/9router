@@ -275,6 +275,7 @@ export const USAGE_SUPPORTED_PROVIDERS = [
   "glm-cn",
   "minimax",
   "minimax-cn",
+  "vercel-ai-gateway",
 ];
 
 // Subset that uses apikey auth (still surfaced on quota page)
@@ -283,4 +284,5 @@ export const USAGE_APIKEY_PROVIDERS = [
   "glm-cn",
   "minimax",
   "minimax-cn",
+  "vercel-ai-gateway",
 ];
