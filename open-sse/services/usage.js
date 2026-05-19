@@ -1193,24 +1193,30 @@ async function getVercelAiGatewayUsage(apiKey, proxyOptions = null) {
       };
     }
 
-    // Both rows share the same remaining percentage so the color/progress bar
-    // stay consistent. We split into two rows because users want to see the
-    // remaining dollar amount at a glance, not just the used / total ratio.
     const remainingPercentage = (balance / total) * 100;
+
+    // The "Used" row is informational — it shows just the dollar amount
+    // already spent, so we render the denominator as ∞ (no preset limit) and
+    // keep the bar neutral. The "Remaining" row uses an X/X self-referential
+    // format that matches the user's mental model of a free-tier credit jar
+    // (e.g. "5 / 5" when untouched, "3.18 / 3.18" when partially used). When
+    // the balance is depleted, we fall back to "0 / total" so the row still
+    // conveys the prior allotment instead of "0 / ∞".
+    const remainingRowTotal = balance > 0 ? balance : total;
 
     return {
       plan: "Pay-as-you-go",
       quotas: {
         "Used (USD)": {
           used: totalUsed,
-          total,
-          remaining: balance,
-          remainingPercentage,
-          unlimited: false,
+          total: 0,
+          remaining: 0,
+          remainingPercentage: 100,
+          unlimited: true,
         },
         "Remaining (USD)": {
           used: balance,
-          total,
+          total: remainingRowTotal,
           remaining: balance,
           remainingPercentage,
           unlimited: false,
