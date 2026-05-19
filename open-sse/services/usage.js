@@ -1193,13 +1193,26 @@ async function getVercelAiGatewayUsage(apiKey, proxyOptions = null) {
       };
     }
 
+    // Both rows share the same remaining percentage so the color/progress bar
+    // stay consistent. We split into two rows because users want to see the
+    // remaining dollar amount at a glance, not just the used / total ratio.
+    const remainingPercentage = (balance / total) * 100;
+
     return {
       plan: "Pay-as-you-go",
       quotas: {
-        "Balance ($)": {
+        "Used (USD)": {
           used: totalUsed,
           total,
           remaining: balance,
+          remainingPercentage,
+          unlimited: false,
+        },
+        "Remaining (USD)": {
+          used: balance,
+          total,
+          remaining: balance,
+          remainingPercentage,
           unlimited: false,
         },
       },
