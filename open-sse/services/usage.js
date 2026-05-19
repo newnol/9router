@@ -1195,15 +1195,10 @@ async function getVercelAiGatewayUsage(apiKey, proxyOptions = null) {
 
     const remainingPercentage = (balance / total) * 100;
 
-    // The "Used" row is informational — it shows just the dollar amount
-    // already spent, so we render the denominator as ∞ (no preset limit) and
-    // keep the bar neutral. The "Remaining" row uses an X/X self-referential
-    // format that matches the user's mental model of a free-tier credit jar
-    // (e.g. "5 / 5" when untouched, "3.18 / 3.18" when partially used). When
-    // the balance is depleted, we fall back to "0 / total" so the row still
-    // conveys the prior allotment instead of "0 / ∞".
-    const remainingRowTotal = balance > 0 ? balance : total;
-
+    // "Used" row: informational, denominator = ∞ (no fixed cap on spending).
+    // "Remaining" row: balance / total where total = balance + totalUsed
+    // (the original credit allotment). For a $5 free tier that spent $1.82,
+    // this renders "3.18 / 5" with the bar at 64%.
     return {
       plan: "Pay-as-you-go",
       quotas: {
@@ -1216,7 +1211,7 @@ async function getVercelAiGatewayUsage(apiKey, proxyOptions = null) {
         },
         "Remaining (USD)": {
           used: balance,
-          total: remainingRowTotal,
+          total,
           remaining: balance,
           remainingPercentage,
           unlimited: false,
