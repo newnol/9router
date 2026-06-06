@@ -1202,10 +1202,13 @@ async function getVercelAiGatewayUsage(apiKey, proxyOptions = null) {
     // Vercel returns numeric strings; coerce safely.
     const balance = Number(data?.balance) || 0;
     const totalUsed = Number(data?.total_used) || 0;
-    const total = balance + totalUsed;
 
-    if (!Number.isFinite(total) || total <= 0) {
-      // Account with no credit allocation (BYOK-only or unfunded).
+    // Vercel gives $5/month free credit. The API doesn't return the
+    // monthly allocation so we use the known constant as the denominator.
+    const MONTHLY_CREDIT = 5;
+    const remainingPercentage = (balance / MONTHLY_CREDIT) * 100;
+
+    if (balance <= 0 && totalUsed <= 0) {
       return {
         plan: "Pay-as-you-go",
         message: "Vercel AI Gateway connected. No credit allocation found (BYOK or unfunded account).",
@@ -1213,12 +1216,8 @@ async function getVercelAiGatewayUsage(apiKey, proxyOptions = null) {
       };
     }
 
-    const remainingPercentage = (balance / total) * 100;
-
-    // "Used" row: informational, denominator = ∞ (no fixed cap on spending).
-    // "Remaining" row: balance / total where total = balance + totalUsed
-    // (the original credit allotment). For a $5 free tier that spent $1.82,
-    // this renders "3.18 / 5" with the bar at 64%.
+    // "Used (USD)": how much has been spent this month (no fixed cap → unlimited).
+    // "Remaining (USD)": balance remaining out of the $5 monthly allocation.
     return {
       plan: "Pay-as-you-go",
       quotas: {
@@ -1231,7 +1230,7 @@ async function getVercelAiGatewayUsage(apiKey, proxyOptions = null) {
         },
         "Remaining (USD)": {
           used: balance,
-          total,
+          total: MONTHLY_CREDIT,
           remaining: balance,
           remainingPercentage,
           unlimited: false,
@@ -1240,6 +1239,9 @@ async function getVercelAiGatewayUsage(apiKey, proxyOptions = null) {
     };
   } catch (error) {
     return { message: `Vercel AI Gateway error: ${error.message}` };
+  }
+}
+
 async function getQoderUsage(accessToken, proxyOptions = null) {
   if (!accessToken) {
     return { message: "Qoder usage unavailable: no access token" };

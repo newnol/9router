@@ -1169,7 +1169,6 @@ export default function ProviderDetailPage() {
                 </Button>
               )}
               {/* Thinking config — shows only for providers that explicitly declare thinkingConfig */}
-              {AI_PROVIDERS[providerId]?.thinkingConfig && (
               {connections.length > 0 && (
                 <>
                   <Button
