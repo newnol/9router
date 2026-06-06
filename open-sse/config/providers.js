@@ -124,6 +124,11 @@ export const PROVIDERS = {
     baseUrl: "https://api.openai.com/v1/chat/completions",
     format: "openai"
   },
+  "digitalocean": {
+    baseUrl: "https://inference.do-ai.run/v1/chat/completions",
+    format: "openai",
+    passthroughModels: true,
+  },
   "vercel-ai-gateway": {
     baseUrl: "https://ai-gateway.vercel.sh/v1/chat/completions",
     format: "openai",

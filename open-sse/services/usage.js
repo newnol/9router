@@ -98,6 +98,8 @@ export async function getUsageForProvider(connection, proxyOptions = null) {
       return await getMiniMaxUsage(apiKey, provider, proxyOptions);
     case "vercel-ai-gateway":
       return await getVercelAiGatewayUsage(apiKey, proxyOptions);
+    case "digitalocean":
+      return await getDigitalOceanUsage(apiKey, proxyOptions);
     default:
       return { message: `Usage API not implemented for ${provider}` };
   }
@@ -1301,5 +1303,47 @@ async function getQoderUsage(accessToken, proxyOptions = null) {
     };
   } catch (error) {
     return { message: `Qoder connected. Unable to fetch usage: ${error.message}` };
+  }
+}
+
+/**
+ * DigitalOcean Serverless Inference — API key validation only.
+ *
+ * DO doesn't expose a public usage/quota REST endpoint for Model Access Keys,
+ * so we verify connectivity by hitting GET /v1/models (lightweight, no cost)
+ * and return a connected message. If the key is invalid we surface the error.
+ */
+async function getDigitalOceanUsage(apiKey, proxyOptions = null) {
+  if (!apiKey) {
+    return { message: "DigitalOcean AI API key not available." };
+  }
+
+  try {
+    const response = await proxyAwareFetch("https://inference.do-ai.run/v1/models", {
+      method: "GET",
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        Accept: "application/json",
+      },
+    }, proxyOptions);
+
+    if (response.status === 401 || response.status === 403) {
+      return { message: "DigitalOcean AI API key invalid or expired." };
+    }
+
+    if (!response.ok) {
+      return { message: `DigitalOcean AI error (${response.status}).` };
+    }
+
+    const data = await response.json().catch(() => null);
+    const modelCount = Array.isArray(data?.data) ? data.data.length : 0;
+
+    return {
+      message: modelCount > 0
+        ? `DigitalOcean AI connected. ${modelCount} models available.`
+        : "DigitalOcean AI connected.",
+    };
+  } catch (error) {
+    return { message: `DigitalOcean AI error: ${error.message}` };
   }
 }
