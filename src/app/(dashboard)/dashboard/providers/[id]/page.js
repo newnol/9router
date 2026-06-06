@@ -1168,7 +1168,6 @@ export default function ProviderDetailPage() {
                   Apply Proxy
                 </Button>
               )}
-              {/* Thinking config — shows only for providers that explicitly declare thinkingConfig */}
               {connections.length > 0 && (
                 <>
                   <Button
