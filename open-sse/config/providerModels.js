@@ -527,6 +527,22 @@ export const PROVIDER_MODELS = {
     { id: "voyage-law-2", name: "Voyage Law 2", type: "embedding" },
     { id: "voyage-multilingual-2", name: "Voyage Multilingual 2", type: "embedding" },
   ],
+  digitalocean: [
+    // LLM models (OpenAI-compatible, single endpoint https://inference.do-ai.run/v1)
+    // Model list is dynamic — fetched via modelsFetcher; these are the well-known stable models.
+    { id: "deepseek-ai/deepseek-v4-pro", name: "DeepSeek V4 Pro" },
+    { id: "moonshotai/kimi-k2.6", name: "Kimi K2.6" },
+    { id: "meta-llama/llama-3.3-70b-instruct", name: "Llama 3.3 70B Instruct" },
+    { id: "meta-llama/llama-3.1-70b-instruct", name: "Llama 3.1 70B Instruct" },
+    { id: "meta-llama/llama-3.1-8b-instruct", name: "Llama 3.1 8B Instruct" },
+    { id: "mistralai/mistral-large-2411", name: "Mistral Large 2411" },
+    { id: "mistralai/mistral-nemo-12b-instruct", name: "Mistral Nemo 12B" },
+    { id: "deepseek-ai/deepseek-r1", name: "DeepSeek R1" },
+    { id: "deepseek-ai/deepseek-v3", name: "DeepSeek V3" },
+    // Embedding
+    { id: "text-embedding-3-small", name: "Text Embedding 3 Small", type: "embedding" },
+    { id: "text-embedding-3-large", name: "Text Embedding 3 Large", type: "embedding" },
+  ],
   siliconflow: [
     { id: "deepseek-ai/DeepSeek-V3.2", name: "DeepSeek V3.2" },
     { id: "deepseek-ai/DeepSeek-V3.1", name: "DeepSeek V3.1" },
