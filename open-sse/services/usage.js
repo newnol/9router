@@ -1307,11 +1307,10 @@ async function getQoderUsage(accessToken, proxyOptions = null) {
 }
 
 /**
- * DigitalOcean Serverless Inference — API key validation only.
+ * DigitalOcean Serverless Inference — connectivity check via Model Access Key.
  *
- * DO doesn't expose a public usage/quota REST endpoint for Model Access Keys,
- * so we verify connectivity by hitting GET /v1/models (lightweight, no cost)
- * and return a connected message. If the key is invalid we surface the error.
+ * Model Access Keys are inference-only and don't have billing API scope,
+ * so we verify the key by calling GET /v1/models and report available models.
  */
 async function getDigitalOceanUsage(apiKey, proxyOptions = null) {
   if (!apiKey) {

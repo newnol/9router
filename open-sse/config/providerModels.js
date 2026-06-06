@@ -530,6 +530,8 @@ export const PROVIDER_MODELS = {
   digitalocean: [
     // LLM models (OpenAI-compatible, single endpoint https://inference.do-ai.run/v1)
     // Model list is dynamic — fetched via modelsFetcher; these are the well-known stable models.
+    { id: "deepseek-ai/deepseek-v4-pro", name: "DeepSeek V4 Pro" },
+    { id: "moonshotai/kimi-k2.6", name: "Kimi K2.6" },
     { id: "meta-llama/llama-3.3-70b-instruct", name: "Llama 3.3 70B Instruct" },
     { id: "meta-llama/llama-3.1-70b-instruct", name: "Llama 3.1 70B Instruct" },
     { id: "meta-llama/llama-3.1-8b-instruct", name: "Llama 3.1 8B Instruct" },
