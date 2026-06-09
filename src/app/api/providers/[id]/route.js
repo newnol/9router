@@ -100,7 +100,9 @@ export async function PUT(request, { params }) {
       lastErrorAt,
       providerSpecificData,
       weight,
-      maxConcurrent
+      maxConcurrent,
+      maxRpm,
+      maxTpm
     } = body;
 
     const existing = await getProviderConnectionById(id);
@@ -130,6 +132,8 @@ export async function PUT(request, { params }) {
     if (lastErrorAt !== undefined) updateData.lastErrorAt = lastErrorAt;
     if (weight !== undefined) updateData.weight = weight;
     if (maxConcurrent !== undefined) updateData.maxConcurrent = maxConcurrent;
+    if (maxRpm !== undefined) updateData.maxRpm = maxRpm;
+    if (maxTpm !== undefined) updateData.maxTpm = maxTpm;
 
     if (
       shouldMergeProviderSpecificData(

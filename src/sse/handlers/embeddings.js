@@ -5,6 +5,7 @@ import {
   extractApiKey,
   isValidApiKey,
 } from "../services/auth.js";
+import { decrementInFlight } from "open-sse/services/inFlightTracker.js";
 import { getSettings } from "@/lib/localDb";
 import { getModelInfo } from "../services/model.js";
 import { handleEmbeddingsCore } from "open-sse/handlers/embeddingsCore.js";
@@ -123,6 +124,8 @@ export async function handleEmbeddings(request) {
         await clearAccountError(credentials.connectionId, credentials, model);
       }
     });
+
+    decrementInFlight(credentials.connectionId);
 
     if (result.success) return result.response;
 

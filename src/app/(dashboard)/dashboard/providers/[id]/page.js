@@ -64,6 +64,7 @@ export default function ProviderDetailPage() {
   const [oneByOneSummary, setOneByOneSummary] = useState(null);
   const stopOneByOneRef = useRef(false);
   const [importingQoderModels, setImportingQoderModels] = useState(false);
+  const [resettingErrors, setResettingErrors] = useState(false);
   const { copied, copy } = useCopyToClipboard();
 
   const AG_RISK_STORAGE_KEY = "ag_risk_confirmed";
@@ -468,6 +469,29 @@ export default function ProviderDetailPage() {
       alert(translate("Error fetching models") + ": " + error.message);
     } finally {
       setImportingQoderModels(false);
+    }
+  };
+
+  const handleResetErrors = async () => {
+    if (resettingErrors) return;
+    setResettingErrors(true);
+    try {
+      const res = await fetch("/api/providers/reset-errors", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ provider: providerId }),
+      });
+      if (res.ok) {
+        await fetchConnections();
+      } else {
+        const data = await res.json();
+        alert(data.error || "Failed to reset error states");
+      }
+    } catch (error) {
+      console.log("Error resetting error states:", error);
+      alert("Network error");
+    } finally {
+      setResettingErrors(false);
     }
   };
 
@@ -1266,6 +1290,15 @@ export default function ProviderDetailPage() {
                       {oneByOneStopping ? "Stopping..." : "Stop"}
                     </Button>
                   )}
+                  <Button
+                    size="sm"
+                    variant="secondary"
+                    icon="restart_alt"
+                    onClick={handleResetErrors}
+                    disabled={resettingErrors}
+                  >
+                    {resettingErrors ? "Resetting..." : "Reset Error State"}
+                  </Button>
                 </>
               )}
               {/* Thinking config */}

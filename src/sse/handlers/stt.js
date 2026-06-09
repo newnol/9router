@@ -2,6 +2,7 @@ import {
   extractApiKey, isValidApiKey,
   getProviderCredentials, markAccountUnavailable,
 } from "../services/auth.js";
+import { decrementInFlight } from "open-sse/services/inFlightTracker.js";
 import { getSettings } from "@/lib/localDb";
 import { getModelInfo } from "../services/model.js";
 import { handleSttCore } from "open-sse/handlers/sttCore.js";
@@ -73,6 +74,8 @@ export async function handleStt(request) {
     log.info("AUTH", `\x1b[32mUsing ${provider} account: ${credentials.connectionName}\x1b[0m`);
 
     const result = await handleSttCore({ provider, model, formData, credentials });
+
+    decrementInFlight(credentials.connectionId);
 
     if (result.success) return result.response;
 

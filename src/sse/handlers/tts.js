@@ -2,6 +2,7 @@ import {
   extractApiKey, isValidApiKey,
   getProviderCredentials, markAccountUnavailable,
 } from "../services/auth.js";
+import { decrementInFlight } from "open-sse/services/inFlightTracker.js";
 import { getSettings } from "@/lib/localDb";
 import { getModelInfo, getComboModels } from "../services/model.js";
 import { handleTtsCore } from "open-sse/handlers/ttsCore.js";
@@ -99,6 +100,8 @@ async function handleSingleModelTts(body, modelStr, responseFormat, language) {
     log.info("AUTH", `\x1b[32mUsing ${provider} account: ${credentials.connectionName}\x1b[0m`);
 
     const result = await handleTtsCore({ provider, model, input: body.input, credentials, responseFormat, language });
+
+    decrementInFlight(credentials.connectionId);
 
     if (result.success) return result.response;
 

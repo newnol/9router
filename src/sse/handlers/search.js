@@ -5,6 +5,7 @@ import {
   extractApiKey,
   isValidApiKey,
 } from "../services/auth.js";
+import { decrementInFlight } from "open-sse/services/inFlightTracker.js";
 import { getSettings, getCombos } from "@/lib/localDb";
 import { AI_PROVIDERS, resolveProviderId } from "@/shared/constants/providers.js";
 import { handleSearchCore } from "open-sse/handlers/search/index.js";
@@ -188,6 +189,8 @@ async function handleSingleProviderSearch(body, providerInput, request, apiKey, 
         await clearAccountError(credentials.connectionId, credentials);
       }
     });
+
+    decrementInFlight(credentials.connectionId);
 
     if (result.success) return result.response;
 

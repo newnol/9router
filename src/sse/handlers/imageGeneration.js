@@ -5,6 +5,7 @@ import {
   extractApiKey,
   isValidApiKey,
 } from "../services/auth.js";
+import { decrementInFlight } from "open-sse/services/inFlightTracker.js";
 import { getSettings } from "@/lib/localDb";
 import { getModelInfo, getComboModels } from "../services/model.js";
 import { handleImageGenerationCore } from "open-sse/handlers/imageGenerationCore.js";
@@ -125,6 +126,8 @@ async function handleSingleModelImage(body, modelStr, { wantsStream, binaryOutpu
         await clearAccountError(credentials.connectionId, credentials, model);
       }
     });
+
+    decrementInFlight(credentials.connectionId);
 
     if (result.success) return result.response;
 

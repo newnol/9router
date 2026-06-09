@@ -9,7 +9,7 @@
  *   - recency of last error (time decay)
  */
 
-import { getInFlight, getMaxConcurrent } from "./inFlightTracker.js";
+import { getInFlight, getMaxConcurrent, getRpmRatio } from "./inFlightTracker.js";
 
 const MAX_LATENCY_MS = 30000;
 const RECOVERY_WINDOW_MS = 5 * 60 * 1000; // 5 min to fully recover from last error
@@ -33,6 +33,11 @@ export function computeScore(connection) {
   // Penalise up to 50% of score when fully loaded
   const concurrencyFactor = 1 - concurrencyRatio * 0.5;
 
+  // --- rate limit capacity (RPM) ---
+  const rpmRatio = getRpmRatio(connection);
+  // Penalise up to 30% when at max RPM
+  const rateLimitFactor = 1 - rpmRatio * 0.3;
+
   // --- latency ---
   const avgLatency = connection.avgLatencyMs || 0;
   const latencyRatio = MAX_LATENCY_MS > 0 ? Math.min(avgLatency / MAX_LATENCY_MS, 1) : 0;
@@ -41,7 +46,7 @@ export function computeScore(connection) {
   // --- recency of last error ---
   const recencyFactor = getRecencyFactor(connection);
 
-  return reliability * concurrencyFactor * latencyFactor * recencyFactor;
+  return reliability * concurrencyFactor * rateLimitFactor * latencyFactor * recencyFactor;
 }
 
 function getRecencyFactor(connection) {

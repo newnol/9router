@@ -4,7 +4,7 @@ import { formatRetryAfter, checkFallbackError, isModelLockActive, buildModelLock
 import { MAX_RATE_LIMIT_COOLDOWN_MS } from "open-sse/config/errorConfig.js";
 import { resolveProviderId, FREE_PROVIDERS } from "@/shared/constants/providers.js";
 import { sortByScore } from "open-sse/services/connectionScoring.js";
-import { getInFlight, incrementInFlight } from "open-sse/services/inFlightTracker.js";
+import { getInFlight, incrementInFlight, recordRequest } from "open-sse/services/inFlightTracker.js";
 import * as log from "../utils/logger.js";
 
 // Mutex to prevent race conditions during account selection
@@ -194,9 +194,10 @@ export async function getProviderCredentials(provider, excludeConnectionIds = nu
       connection = availableConnections[0];
     }
 
-    // Increment in-flight counter for selected connection
+    // Increment in-flight counter and record request timestamp for rate tracking
     if (connection) {
       incrementInFlight(connection.id);
+      recordRequest(connection.id);
     }
 
     const resolvedProxy = await resolveConnectionProxyConfig(connection.providerSpecificData || {});

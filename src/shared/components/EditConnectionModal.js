@@ -26,7 +26,7 @@ export default function EditConnectionModal({ isOpen, connection, proxyPools, on
   const [validating, setValidating] = useState(false);
   const [validationResult, setValidationResult] = useState(null);
   const [saving, setSaving] = useState(false);
-  const [routingData, setRoutingData] = useState({ weight: 1, maxConcurrent: 3 });
+  const [routingData, setRoutingData] = useState({ weight: 1, maxConcurrent: 3, maxRpm: 0, maxTpm: 0 });
 
   useEffect(() => {
     if (connection) {
@@ -50,6 +50,8 @@ export default function EditConnectionModal({ isOpen, connection, proxyPools, on
       setRoutingData({
         weight: connection.weight || 1,
         maxConcurrent: connection.maxConcurrent || 3,
+        maxRpm: connection.maxRpm || 0,
+        maxTpm: connection.maxTpm || 0,
       });
       setTestResult(null);
       setValidationResult(null);
@@ -111,6 +113,8 @@ export default function EditConnectionModal({ isOpen, connection, proxyPools, on
         priority: formData.priority,
         weight: Number(routingData.weight) || 1,
         maxConcurrent: Number(routingData.maxConcurrent) || 3,
+        maxRpm: Number(routingData.maxRpm) || 0,
+        maxTpm: Number(routingData.maxTpm) || 0,
       };
       if (!isOAuth && formData.apiKey) {
         updates.apiKey = formData.apiKey;
@@ -269,6 +273,22 @@ export default function EditConnectionModal({ isOpen, connection, proxyPools, on
               value={routingData.maxConcurrent}
               onChange={(e) => setRoutingData({ ...routingData, maxConcurrent: Number(e.target.value) || 3 })}
               hint="Max parallel requests before routing to next available"
+            />
+            <Input
+              label="Max Requests/min (0 = unlimited)"
+              type="number"
+              min={0}
+              value={routingData.maxRpm}
+              onChange={(e) => setRoutingData({ ...routingData, maxRpm: Number(e.target.value) || 0 })}
+              hint="Smart routing prefers connections with remaining capacity"
+            />
+            <Input
+              label="Max Tokens/min (0 = unlimited)"
+              type="number"
+              min={0}
+              value={routingData.maxTpm}
+              onChange={(e) => setRoutingData({ ...routingData, maxTpm: Number(e.target.value) || 0 })}
+              hint="Reserved for future use. 0 = unlimited"
             />
           </div>
         </div>
