@@ -26,6 +26,7 @@ export default function EditConnectionModal({ isOpen, connection, proxyPools, on
   const [validating, setValidating] = useState(false);
   const [validationResult, setValidationResult] = useState(null);
   const [saving, setSaving] = useState(false);
+  const [routingData, setRoutingData] = useState({ weight: 1, maxConcurrent: 3 });
 
   useEffect(() => {
     if (connection) {
@@ -46,6 +47,10 @@ export default function EditConnectionModal({ isOpen, connection, proxyPools, on
       if (connection.provider === "cloudflare-ai" && connection.providerSpecificData) {
         setCloudflareData({ accountId: connection.providerSpecificData.accountId || "" });
       }
+      setRoutingData({
+        weight: connection.weight || 1,
+        maxConcurrent: connection.maxConcurrent || 3,
+      });
       setTestResult(null);
       setValidationResult(null);
     }
@@ -104,6 +109,8 @@ export default function EditConnectionModal({ isOpen, connection, proxyPools, on
       const updates = {
         name: formData.name,
         priority: formData.priority,
+        weight: Number(routingData.weight) || 1,
+        maxConcurrent: Number(routingData.maxConcurrent) || 3,
       };
       if (!isOAuth && formData.apiKey) {
         updates.apiKey = formData.apiKey;
@@ -242,6 +249,29 @@ export default function EditConnectionModal({ isOpen, connection, proxyPools, on
             </div>
           </div>
         )}
+
+        {/* Routing */}
+        <div className="bg-sidebar/50 p-4 rounded-lg border border-accent/20">
+          <h3 className="font-semibold mb-3 text-sm">Routing</h3>
+          <div className="flex flex-col gap-3">
+            <Input
+              label="Weight (for Weighted Round Robin)"
+              type="number"
+              min={1}
+              value={routingData.weight}
+              onChange={(e) => setRoutingData({ ...routingData, weight: Number(e.target.value) || 1 })}
+              hint="Higher = more requests routed to this connection"
+            />
+            <Input
+              label="Max Concurrent (for Smart / Least Concurrency)"
+              type="number"
+              min={1}
+              value={routingData.maxConcurrent}
+              onChange={(e) => setRoutingData({ ...routingData, maxConcurrent: Number(e.target.value) || 3 })}
+              hint="Max parallel requests before routing to next available"
+            />
+          </div>
+        </div>
 
         {!isCompatible && !isAzure && !isCloudflareAi && (
           <div className="flex items-center gap-3">

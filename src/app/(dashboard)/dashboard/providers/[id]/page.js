@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import Image from "next/image";
-import { Card, Button, Badge, Input, Modal, CardSkeleton, OAuthModal, KiroOAuthWrapper, CursorAuthModal, IFlowCookieModal, GitLabAuthModal, Toggle, Select, EditConnectionModal, NoAuthProxyCard, ConfirmModal } from "@/shared/components";
+import { Card, Button, Badge, Input, Modal, CardSkeleton, OAuthModal, KiroOAuthWrapper, CursorAuthModal, IFlowCookieModal, GitLabAuthModal, Select, EditConnectionModal, NoAuthProxyCard, ConfirmModal } from "@/shared/components";
 import { OAUTH_PROVIDERS, APIKEY_PROVIDERS, FREE_PROVIDERS, FREE_TIER_PROVIDERS, WEB_COOKIE_PROVIDERS, getProviderAlias, isOpenAICompatibleProvider, isAnthropicCompatibleProvider, AI_PROVIDERS, THINKING_CONFIG } from "@/shared/constants/providers";
 import { getModelsByProviderId } from "@/shared/constants/models";
 import { useCopyToClipboard } from "@/shared/hooks/useCopyToClipboard";
@@ -327,17 +327,17 @@ export default function ProviderDetailPage() {
     }
   };
 
-  const handleRoundRobinToggle = (enabled) => {
-    const strategy = enabled ? "round-robin" : null;
-    const sticky = enabled ? (providerStickyLimit || "1") : providerStickyLimit;
-    if (enabled && !providerStickyLimit) setProviderStickyLimit("1");
-    setProviderStrategy(strategy);
-    saveProviderStrategy(strategy, sticky);
+  const handleStrategyChange = (strategy, stickyLimit) => {
+    setProviderStrategy(strategy || null);
+    if (strategy && !providerStickyLimit) setProviderStickyLimit("1");
+    saveProviderStrategy(strategy || null, stickyLimit || providerStickyLimit);
   };
 
   const handleStickyLimitChange = (value) => {
     setProviderStickyLimit(value);
-    saveProviderStrategy("round-robin", value);
+    if (providerStrategy === "round-robin") {
+      saveProviderStrategy("round-robin", value);
+    }
   };
 
   const saveThinkingConfig = async (mode) => {
@@ -1284,11 +1284,18 @@ export default function ProviderDetailPage() {
                 </div>
               )}
               <div className="flex flex-wrap items-center gap-2">
-                <span className="text-xs text-text-muted font-medium">Round Robin</span>
-                <Toggle
-                  checked={providerStrategy === "round-robin"}
-                  onChange={handleRoundRobinToggle}
-                />
+                <span className="text-xs text-text-muted font-medium">Strategy:</span>
+                <select
+                  value={providerStrategy || ""}
+                  onChange={(e) => handleStrategyChange(e.target.value, providerStickyLimit)}
+                  className="text-xs px-2 py-1 border border-border rounded-md bg-background focus:outline-none focus:border-primary max-w-[160px]"
+                >
+                  <option value="">Default (Fill First)</option>
+                  <option value="round-robin">Round Robin</option>
+                  <option value="smart">Smart</option>
+                  <option value="least-concurrency">Least Concurrency</option>
+                  <option value="weighted-round-robin">Weighted Round Robin</option>
+                </select>
                 {providerStrategy === "round-robin" && (
                   <div className="flex items-center gap-1.5">
                     <span className="text-xs text-text-muted">Sticky:</span>
