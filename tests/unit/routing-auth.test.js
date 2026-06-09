@@ -32,6 +32,7 @@ vi.mock("open-sse/services/connectionScoring.js", () => ({
 vi.mock("open-sse/services/inFlightTracker.js", () => ({
   getInFlight: mocks.getInFlight,
   incrementInFlight: mocks.incrementInFlight,
+  recordRequest: vi.fn(),
   getMaxConcurrent: vi.fn().mockReturnValue(3),
   decrementInFlight: vi.fn(),
   getInFlightSnapshot: vi.fn(),

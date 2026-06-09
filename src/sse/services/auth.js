@@ -34,27 +34,34 @@ export async function getProviderCredentials(provider, excludeConnectionIds = nu
     // Resolve alias to provider ID (e.g., "kc" -> "kilocode")
     const providerId = resolveProviderId(provider);
 
-    // Inject a virtual connection for no-auth free providers (with optional proxy pool from settings)
+    // For no-auth free providers: try proxy connections from DB first, fall back to settings
+    let connections;
     if (FREE_PROVIDERS[providerId]?.noAuth) {
-      const settings = await getSettings();
-      const override = (settings.providerStrategies || {})[providerId] || {};
-      const resolvedProxy = await resolveConnectionProxyConfig({ proxyPoolId: override.proxyPoolId || "" });
-      return {
-        id: "noauth",
-        connectionName: "Public",
-        isActive: true,
-        accessToken: "public",
-        providerSpecificData: {
-          connectionProxyEnabled: resolvedProxy.connectionProxyEnabled,
-          connectionProxyUrl: resolvedProxy.connectionProxyUrl,
-          connectionNoProxy: resolvedProxy.connectionNoProxy,
-          connectionProxyPoolId: resolvedProxy.proxyPoolId || null,
-          vercelRelayUrl: resolvedProxy.vercelRelayUrl || "",
-        },
-      };
+      connections = await getProviderConnections({ provider: providerId, isActive: true });
+      if (connections.length > 0) {
+        // Use proxy connections — each has its own proxyPoolId in providerSpecificData
+      } else {
+        // Old fallback: single virtual connection from settings
+        const settings = await getSettings();
+        const override = (settings.providerStrategies || {})[providerId] || {};
+        const resolvedProxy = await resolveConnectionProxyConfig({ proxyPoolId: override.proxyPoolId || "" });
+        return {
+          id: "noauth",
+          connectionName: "Public",
+          isActive: true,
+          accessToken: "public",
+          providerSpecificData: {
+            connectionProxyEnabled: resolvedProxy.connectionProxyEnabled,
+            connectionProxyUrl: resolvedProxy.connectionProxyUrl,
+            connectionNoProxy: resolvedProxy.connectionNoProxy,
+            connectionProxyPoolId: resolvedProxy.proxyPoolId || null,
+            vercelRelayUrl: resolvedProxy.vercelRelayUrl || "",
+          },
+        };
+      }
+    } else {
+      connections = await getProviderConnections({ provider: providerId, isActive: true });
     }
-
-    const connections = await getProviderConnections({ provider: providerId, isActive: true });
     log.debug("AUTH", `${provider} | total connections: ${connections.length}, excludeIds: ${excludeSet.size > 0 ? [...excludeSet].join(",") : "none"}, model: ${model || "any"}`);
 
     if (connections.length === 0) {
