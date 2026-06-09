@@ -1193,7 +1193,7 @@ export default function ProviderDetailPage() {
                 </>
               )}
               {/* Thinking config */}
-              {/* {thinkingConfig && (
+              {AI_PROVIDERS[providerId]?.thinkingConfig && (
                 <div className="flex items-center gap-2">
                   <span className="text-xs text-text-muted font-medium">Thinking</span>
                   <select
@@ -1207,7 +1207,6 @@ export default function ProviderDetailPage() {
                   </select>
                 </div>
               )}
-              {/* Round Robin toggle */}
               <div className="flex flex-wrap items-center gap-2">
                 <span className="text-xs text-text-muted font-medium">Round Robin</span>
                 <Toggle
