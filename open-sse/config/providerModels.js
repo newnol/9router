@@ -542,6 +542,18 @@ export const PROVIDER_MODELS = {
     { id: "mistral-large-2411", name: "Mistral Large 2411" },
     { id: "mistral-nemo-12b-instruct", name: "Mistral Nemo 12B" },
   ],
+  bm: [
+    // BluesMinds — OpenAI-compatible unified API (https://api.bluesminds.com/v1)
+    // Full model list is dynamic via modelsFetcher; these are well-known available models.
+    { id: "gpt-4o", name: "GPT-4o" },
+    { id: "gpt-4o-mini", name: "GPT-4o Mini" },
+    { id: "claude-sonnet-4-5", name: "Claude Sonnet 4.5" },
+    { id: "claude-haiku-4-5", name: "Claude Haiku 4.5" },
+    { id: "gemini-2.5-flash", name: "Gemini 2.5 Flash" },
+    { id: "deepseek-chat", name: "DeepSeek V3" },
+    { id: "deepseek-reasoner", name: "DeepSeek R1" },
+    { id: "meta-llama/llama-3.3-70b-instruct", name: "Llama 3.3 70B" },
+  ],
   siliconflow: [
     { id: "deepseek-ai/DeepSeek-V3.2", name: "DeepSeek V3.2" },
     { id: "deepseek-ai/DeepSeek-V3.1", name: "DeepSeek V3.1" },
