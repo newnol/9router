@@ -892,6 +892,22 @@ export const PROVIDER_MODELS = {
     { id: "gen4_turbo", name: "Gen-4 Turbo", type: "video", params: [] },
     { id: "gen3a_turbo", name: "Gen-3 Alpha Turbo", type: "video", params: [] },
   ],
+
+  // === New providers ===
+  kimchi: [
+    { id: "kimi-k2.6", name: "Kimi K2.6" },
+    { id: "kimi-k2.5", name: "Kimi K2.5" },
+    { id: "minimax-m2.7", name: "MiniMax M2.7" },
+    { id: "nemotron-3-super-fp4", name: "Nemotron 3 Super FP4" },
+  ],
+  freemodel: [
+    { id: "FRE-5.4", name: "FRE 5.4" },
+    { id: "FRE-5.5", name: "FRE 5.5" },
+  ],
+  "freemodel-cc": [
+    { id: "claude-opus-4.8", name: "Claude Opus 4.8" },
+    { id: "claude-sonnet-4.5", name: "Claude Sonnet 4.5" },
+  ],
 };
 
 // Helper functions
