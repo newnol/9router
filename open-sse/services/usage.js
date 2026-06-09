@@ -100,6 +100,8 @@ export async function getUsageForProvider(connection, proxyOptions = null) {
       return await getVercelAiGatewayUsage(apiKey, proxyOptions);
     case "digitalocean":
       return await getDigitalOceanUsage(apiKey, proxyOptions);
+    case "bluesminds":
+      return await getBluesMindsUsage(apiKey, proxyOptions);
     default:
       return { message: `Usage API not implemented for ${provider}` };
   }
@@ -1344,5 +1346,46 @@ async function getDigitalOceanUsage(apiKey, proxyOptions = null) {
     };
   } catch (error) {
     return { message: `DigitalOcean AI error: ${error.message}` };
+  }
+}
+
+/**
+ * BluesMinds — verify API key via GET /v1/models.
+ *
+ * BluesMinds doesn't expose a credit/balance REST endpoint,
+ * so we validate the key and report available model count.
+ */
+async function getBluesMindsUsage(apiKey, proxyOptions = null) {
+  if (!apiKey) {
+    return { message: "BluesMinds API key not available." };
+  }
+
+  try {
+    const response = await proxyAwareFetch("https://api.bluesminds.com/v1/models", {
+      method: "GET",
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        Accept: "application/json",
+      },
+    }, proxyOptions);
+
+    if (response.status === 401 || response.status === 403) {
+      return { message: "BluesMinds API key invalid or expired." };
+    }
+
+    if (!response.ok) {
+      return { message: `BluesMinds error (${response.status}).` };
+    }
+
+    const data = await response.json().catch(() => null);
+    const modelCount = Array.isArray(data?.data) ? data.data.length : 0;
+
+    return {
+      message: modelCount > 0
+        ? `BluesMinds connected. ${modelCount} models available.`
+        : "BluesMinds connected.",
+    };
+  } catch (error) {
+    return { message: `BluesMinds error: ${error.message}` };
   }
 }

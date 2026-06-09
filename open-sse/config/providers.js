@@ -129,6 +129,10 @@ export const PROVIDERS = {
     format: "openai",
     passthroughModels: true,
   },
+  bluesminds: {
+    baseUrl: "https://api.bluesminds.com/v1/chat/completions",
+    format: "openai",
+  },
   "vercel-ai-gateway": {
     baseUrl: "https://ai-gateway.vercel.sh/v1/chat/completions",
     format: "openai",
