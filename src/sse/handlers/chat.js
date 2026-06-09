@@ -8,7 +8,7 @@ import {
   isValidApiKey,
 } from "../services/auth.js";
 import { cacheClaudeHeaders } from "open-sse/utils/claudeHeaderCache.js";
-import { getSettings } from "@/lib/localDb";
+import { getSettings, updateProviderConnection } from "@/lib/localDb";
 import { getModelInfo, getComboModels } from "../services/model.js";
 import { handleChatCore } from "open-sse/handlers/chatCore.js";
 import { errorResponse, unavailableResponse } from "open-sse/utils/error.js";
@@ -19,6 +19,7 @@ import { detectFormatByEndpoint } from "open-sse/translator/formats.js";
 import * as log from "../utils/logger.js";
 import { updateProviderCredentials, checkAndRefreshToken } from "../services/tokenRefresh.js";
 import { getProjectIdForConnection } from "open-sse/services/projectId.js";
+import { decrementInFlight } from "open-sse/services/inFlightTracker.js";
 
 /**
  * Handle chat completion request
@@ -186,6 +187,7 @@ async function handleSingleModelChat(body, modelStr, clientRawRequest = null, re
     log.info("AUTH", `\x1b[32mUsing ${provider} account: ${credentials.connectionName}\x1b[0m`);
 
     const refreshedCredentials = await checkAndRefreshToken(provider, credentials);
+    const requestStart = Date.now();
 
     // Ensure real project ID is available for providers that need it (P0 fix: cold miss)
     if ((provider === "antigravity" || provider === "gemini-cli") && !refreshedCredentials.projectId) {
@@ -227,6 +229,28 @@ async function handleSingleModelChat(body, modelStr, clientRawRequest = null, re
         await clearAccountError(credentials.connectionId, credentials, model);
       }
     });
+
+    // Decrement in-flight after request completes
+    decrementInFlight(credentials.connectionId);
+
+    // Track latency and update scoring fields
+    const latencyMs = Date.now() - requestStart;
+    const priorTotal = credentials._connection?.totalRequests || 0;
+    const priorSuccess = credentials._connection?.successCount || 0;
+    const priorAvgLatency = credentials._connection?.avgLatencyMs || 0;
+    const updateFields = {
+      totalRequests: priorTotal + 1,
+      avgLatencyMs: priorTotal > 0
+        ? Math.round(priorAvgLatency + (latencyMs - priorAvgLatency) / (priorTotal + 1))
+        : latencyMs,
+    };
+
+    if (result.success) {
+      updateFields.successCount = priorSuccess + 1;
+    }
+
+    // Persist tracking fields in background (non-blocking)
+    updateProviderConnection(credentials.connectionId, updateFields).catch(() => {});
 
     if (result.success) return result.response;
 
