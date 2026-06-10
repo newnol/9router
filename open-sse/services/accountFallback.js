@@ -193,6 +193,57 @@ export function resetAccountState(account) {
 }
 
 /**
+ * Default max total wait time (cumulative) when all accounts are rate-limited.
+ * After this, the handler will return an error instead of continuing to wait.
+ */
+export const MAX_CREDENTIAL_QUEUE_WAIT_MS = 30_000;
+
+/**
+ * When all accounts are rate-limited, wait for the earliest lock to expire
+ * and signal the caller to retry credential selection.
+ *
+ * If the wait time exceeds maxWaitMs, returns null so the caller
+ * can return an error response immediately.
+ *
+ * Tracks cumulative wait time via totalWaitedMs to avoid infinite retries
+ * when multiple short locks expire sequentially but new ones keep appearing.
+ *
+ * @param {object} credentials - Result from getProviderCredentials (allRateLimited=true)
+ * @param {string} provider - Provider name
+ * @param {string} model - Model name
+ * @param {object} log - Logger
+ * @param {number} [totalWaitedMs=0] - Total ms already waited in previous retries
+ * @param {number} [maxWaitMs] - Maximum total wait time (default: 30s)
+ * @returns {{ shouldRetry: boolean, totalWaitedMs: number } | null}
+ */
+export async function waitForAvailableCredentials(credentials, provider, model, log, totalWaitedMs = 0, maxWaitMs = MAX_CREDENTIAL_QUEUE_WAIT_MS) {
+  if (!credentials?.allRateLimited) return null;
+
+  const retryAfterMs = Math.max(0, new Date(credentials.retryAfter).getTime() - Date.now());
+  const remainingBudget = maxWaitMs - totalWaitedMs;
+
+  if (remainingBudget <= 0) {
+    log.warn("QUEUE", `[${provider}/${model}] Credential queue budget exhausted (${totalWaitedMs}ms), returning error`);
+    return null;
+  }
+
+  if (retryAfterMs <= 0) {
+    return { shouldRetry: true, totalWaitedMs };
+  }
+
+  if (retryAfterMs > remainingBudget) {
+    log.warn("QUEUE", `[${provider}/${model}] Retry after (${Math.round(retryAfterMs)}ms) exceeds remaining budget (${remainingBudget}ms), returning error`);
+    return null;
+  }
+
+  const waitMs = retryAfterMs + 500;
+  log.warn("QUEUE", `[${provider}/${model}] All accounts locked, waiting ${Math.round(waitMs)}ms (${credentials.retryAfterHuman}), budget left: ${remainingBudget - waitMs}ms`);
+  await new Promise(resolve => setTimeout(resolve, waitMs));
+
+  return { shouldRetry: true, totalWaitedMs: totalWaitedMs + waitMs };
+}
+
+/**
  * Apply error state to account
  * @param {object} account - Account object
  * @param {number} status - HTTP status code

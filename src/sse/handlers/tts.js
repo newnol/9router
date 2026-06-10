@@ -6,6 +6,7 @@ import { decrementInFlight } from "open-sse/services/inFlightTracker.js";
 import { getSettings } from "@/lib/localDb";
 import { getModelInfo, getComboModels } from "../services/model.js";
 import { handleTtsCore } from "open-sse/handlers/ttsCore.js";
+import { waitForAvailableCredentials } from "open-sse/services/accountFallback.js";
 import { errorResponse, unavailableResponse } from "open-sse/utils/error.js";
 import { HTTP_STATUS } from "open-sse/config/runtimeConfig.js";
 import { AI_PROVIDERS } from "@/shared/constants/providers";
@@ -83,12 +84,18 @@ async function handleSingleModelTts(body, modelStr, responseFormat, language) {
   const excludeConnectionIds = new Set();
   let lastError = null;
   let lastStatus = null;
+  let totalCredentialWaitMs = 0;
 
   while (true) {
     const credentials = await getProviderCredentials(provider, excludeConnectionIds, model);
 
     if (!credentials || credentials.allRateLimited) {
       if (credentials?.allRateLimited) {
+        const queued = await waitForAvailableCredentials(credentials, provider, model, log, totalCredentialWaitMs);
+        if (queued) {
+          totalCredentialWaitMs = queued.totalWaitedMs;
+          continue;
+        }
         const msg = lastError || credentials.lastError || "Unavailable";
         const status = lastStatus || Number(credentials.lastErrorCode) || HTTP_STATUS.SERVICE_UNAVAILABLE;
         return unavailableResponse(status, `[${provider}/${model}] ${msg}`, credentials.retryAfter, credentials.retryAfterHuman);

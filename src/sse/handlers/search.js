@@ -9,6 +9,7 @@ import { decrementInFlight } from "open-sse/services/inFlightTracker.js";
 import { getSettings, getCombos } from "@/lib/localDb";
 import { AI_PROVIDERS, resolveProviderId } from "@/shared/constants/providers.js";
 import { handleSearchCore } from "open-sse/handlers/search/index.js";
+import { waitForAvailableCredentials } from "open-sse/services/accountFallback.js";
 import { errorResponse, unavailableResponse } from "open-sse/utils/error.js";
 import { HTTP_STATUS } from "open-sse/config/runtimeConfig.js";
 import * as log from "../utils/logger.js";
@@ -148,12 +149,18 @@ async function handleSingleProviderSearch(body, providerInput, request, apiKey, 
   const excludeConnectionIds = new Set();
   let lastError = null;
   let lastStatus = null;
+  let totalCredentialWaitMs = 0;
 
   while (true) {
     const credentials = await getProviderCredentials(providerId, excludeConnectionIds);
 
     if (!credentials || credentials.allRateLimited) {
       if (credentials?.allRateLimited) {
+        const queued = await waitForAvailableCredentials(credentials, providerId, null, log, totalCredentialWaitMs);
+        if (queued) {
+          totalCredentialWaitMs = queued.totalWaitedMs;
+          continue;
+        }
         const errorMsg = lastError || credentials.lastError || "Unavailable";
         const status = lastStatus || Number(credentials.lastErrorCode) || HTTP_STATUS.SERVICE_UNAVAILABLE;
         log.warn("SEARCH", `[${providerId}] ${errorMsg} (${credentials.retryAfterHuman})`);

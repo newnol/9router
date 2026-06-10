@@ -11,6 +11,7 @@ import { cacheClaudeHeaders } from "open-sse/utils/claudeHeaderCache.js";
 import { getSettings, updateProviderConnection } from "@/lib/localDb";
 import { getModelInfo, getComboModels } from "../services/model.js";
 import { handleChatCore } from "open-sse/handlers/chatCore.js";
+import { waitForAvailableCredentials } from "open-sse/services/accountFallback.js";
 import { errorResponse, unavailableResponse } from "open-sse/utils/error.js";
 import { handleComboChat } from "open-sse/services/combo.js";
 import { handleBypassRequest } from "open-sse/utils/bypassHandler.js";
@@ -163,6 +164,7 @@ async function handleSingleModelChat(body, modelStr, clientRawRequest = null, re
   const excludeConnectionIds = new Set();
   let lastError = null;
   let lastStatus = null;
+  let totalCredentialWaitMs = 0;
 
   while (true) {
     const credentials = await getProviderCredentials(provider, excludeConnectionIds, model);
@@ -170,6 +172,11 @@ async function handleSingleModelChat(body, modelStr, clientRawRequest = null, re
     // All accounts unavailable
     if (!credentials || credentials.allRateLimited) {
       if (credentials?.allRateLimited) {
+        const queued = await waitForAvailableCredentials(credentials, provider, model, log, totalCredentialWaitMs);
+        if (queued) {
+          totalCredentialWaitMs = queued.totalWaitedMs;
+          continue;
+        }
         const errorMsg = lastError || credentials.lastError || "Unavailable";
         const status = lastStatus || Number(credentials.lastErrorCode) || HTTP_STATUS.SERVICE_UNAVAILABLE;
         log.warn("CHAT", `[${provider}/${model}] ${errorMsg} (${credentials.retryAfterHuman})`);
