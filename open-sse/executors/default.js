@@ -13,7 +13,26 @@ export class DefaultExecutor extends BaseExecutor {
 
   transformRequest(model, body) {
     const transformed = this.applyJsonSchemaFallback(body);
-    return injectReasoningContent({ provider: this.provider, model, body: transformed });
+    const sanitized = this.stripReasoningFields(transformed);
+    const injected = injectReasoningContent({ provider: this.provider, model, body: sanitized });
+    return this.applyProviderDefaults(model, injected);
+  }
+
+  stripReasoningFields(body) {
+    if (!body?.messages) return body;
+    const messages = body.messages.map(m => {
+      if (!m.reasoning_content) return m;
+      const { reasoning_content, ...rest } = m;
+      return rest;
+    });
+    return { ...body, messages };
+  }
+
+  applyProviderDefaults(model, body) {
+    if (this.provider === "groq") {
+      return { ...body, reasoning_format: "hidden" };
+    }
+    return body;
   }
 
   // Fallback json_schema → json_object for openai-compatible providers without native Structured Output.
