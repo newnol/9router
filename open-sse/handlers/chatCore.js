@@ -27,7 +27,7 @@ import { compressMessages, formatRtkLog } from "../rtk/index.js";
  * @param {object} options.credentials - Provider credentials
  * @param {string} options.sourceFormatOverride - Override detected source format (e.g. "openai-responses")
  */
-export async function handleChatCore({ body, modelInfo, credentials, log, onCredentialsRefreshed, onRequestSuccess, onDisconnect, clientRawRequest, connectionId, userAgent, apiKey, ccFilterNaming, rtkEnabled, cavemanEnabled, cavemanLevel, sourceFormatOverride, providerThinking }) {
+export async function handleChatCore({ body, modelInfo, credentials, log, onCredentialsRefreshed, onRequestSuccess, onDisconnect, clientRawRequest, connectionId, userAgent, apiKey, ccFilterNaming, rtkEnabled, cavemanEnabled, cavemanLevel, sourceFormatOverride, providerThinking, pipelineCache = null, _pipelineCacheOut = null }) {
   const { provider, model } = modelInfo;
   const requestStartTime = Date.now();
 
@@ -88,48 +88,61 @@ export async function handleChatCore({ body, modelInfo, credentials, log, onCred
 
   let translatedBody;
   let toolNameMap;
-  if (passthrough) {
-    log?.debug?.("PASSTHROUGH", `${clientTool} → ${provider} | native lossless`);
-    translatedBody = { ...body, model: upstreamModel };
+  let rtkStats;
+  if (pipelineCache) {
+    // Pipeline cache hit — skip CPU-heavy work (translation, RTK, caveman)
+    ({ translatedBody, toolNameMap, rtkStats } = pipelineCache);
   } else {
-    translatedBody = translateRequest(sourceFormat, targetFormat, upstreamModel, body, stream, credentials, provider, reqLogger, stripList, connectionId, clientTool);
-    if (!translatedBody) {
-      trackPendingRequest(model, provider, connectionId, false, true);
-      return createErrorResult(HTTP_STATUS.BAD_REQUEST, `Failed to translate request for ${sourceFormat} → ${targetFormat}`);
+    if (passthrough) {
+      log?.debug?.("PASSTHROUGH", `${clientTool} → ${provider} | native lossless`);
+      translatedBody = { ...body, model: upstreamModel };
+    } else {
+      translatedBody = translateRequest(sourceFormat, targetFormat, upstreamModel, body, stream, credentials, provider, reqLogger, stripList, connectionId, clientTool);
+      if (!translatedBody) {
+        trackPendingRequest(model, provider, connectionId, false, true);
+        return createErrorResult(HTTP_STATUS.BAD_REQUEST, `Failed to translate request for ${sourceFormat} → ${targetFormat}`);
+      }
+      toolNameMap = translatedBody._toolNameMap;
+      delete translatedBody._toolNameMap;
+      translatedBody.model = upstreamModel;
     }
-    toolNameMap = translatedBody._toolNameMap;
-    delete translatedBody._toolNameMap;
-    translatedBody.model = upstreamModel;
-  }
 
-  // Dedupe duplicate built-in tools when equivalent MCP tools are present (Claude clients only).
-  if (clientTool === "claude" && Array.isArray(translatedBody.tools)) {
-    const { tools: deduped, stripped } = dedupeTools(translatedBody.tools);
-    if (stripped.length > 0) {
-      translatedBody.tools = deduped;
-      log?.debug?.("TOOLDEDUP", `stripped ${stripped.length}: ${stripped.slice(0, 3).join(", ")}${stripped.length > 3 ? "..." : ""}`);
+    // Dedupe duplicate built-in tools when equivalent MCP tools are present (Claude clients only).
+    if (clientTool === "claude" && Array.isArray(translatedBody.tools)) {
+      const { tools: deduped, stripped } = dedupeTools(translatedBody.tools);
+      if (stripped.length > 0) {
+        translatedBody.tools = deduped;
+        log?.debug?.("TOOLDEDUP", `stripped ${stripped.length}: ${stripped.slice(0, 3).join(", ")}${stripped.length > 3 ? "..." : ""}`);
+      }
     }
-  }
 
-  // Token savers: applied at the final body just before dispatch
-  // Covers both passthrough (source shape) and translated (target shape) flows
-  const finalFormat = passthrough ? sourceFormat : targetFormat;
+    // Token savers: applied at the final body just before dispatch
+    // Covers both passthrough (source shape) and translated (target shape) flows
+    const finalFormat = passthrough ? sourceFormat : targetFormat;
 
-  // TTS models don't support tool messages/function calling
-  if (getModelType(alias, model) === "tts" && translatedBody.messages) {
-    translatedBody.messages = translatedBody.messages.filter(msg => msg.role !== "tool");
-    delete translatedBody.tools;
-  }
+    // TTS models don't support tool messages/function calling
+    if (getModelType(alias, model) === "tts" && translatedBody.messages) {
+      translatedBody.messages = translatedBody.messages.filter(msg => msg.role !== "tool");
+      delete translatedBody.tools;
+    }
 
-  // RTK: compress tool_result content
-  const rtkStats = compressMessages(translatedBody, rtkEnabled);
-  const rtkLine = formatRtkLog(rtkStats);
-  if (rtkLine) console.log(rtkLine);
+    // RTK: compress tool_result content
+    rtkStats = compressMessages(translatedBody, rtkEnabled);
+    const rtkLine = formatRtkLog(rtkStats);
+    if (rtkLine) console.log(rtkLine);
 
-  // Caveman: inject terse-style system prompt
-  if (cavemanEnabled && cavemanLevel) {
-    injectCaveman(translatedBody, finalFormat, cavemanLevel);
-    log?.debug?.("CAVEMAN", `${cavemanLevel} | ${finalFormat}`);
+    // Caveman: inject terse-style system prompt
+    if (cavemanEnabled && cavemanLevel) {
+      injectCaveman(translatedBody, finalFormat, cavemanLevel);
+      log?.debug?.("CAVEMAN", `${cavemanLevel} | ${finalFormat}`);
+    }
+
+    // Expose pipeline cache for fallback retries
+    if (_pipelineCacheOut) {
+      _pipelineCacheOut.translatedBody = translatedBody;
+      _pipelineCacheOut.toolNameMap = toolNameMap;
+      _pipelineCacheOut.rtkStats = rtkStats;
+    }
   }
 
   const executor = getExecutor(provider);

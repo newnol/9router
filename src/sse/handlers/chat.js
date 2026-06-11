@@ -99,6 +99,7 @@ export async function handleChat(request, clientRawRequest = null) {
     const comboSpecificStrategy = comboStrategies[modelStr]?.fallbackStrategy;
     const comboStrategy = comboSpecificStrategy || settings.comboStrategy || "fallback";
     
+    if (comboStrategy === "fallback") comboStrategy = "fill-first";
     const comboStickyLimit = settings.comboStickyRoundRobinLimit;
     log.info("CHAT", `Combo "${modelStr}" with ${comboModels.length} models (strategy: ${comboStrategy}, sticky: ${comboStickyLimit})`);
     return handleComboChat({
@@ -130,8 +131,9 @@ async function handleSingleModelChat(body, modelStr, clientRawRequest = null, re
       // Check for combo-specific strategy first, fallback to global
       const comboStrategies = chatSettings.comboStrategies || {};
       const comboSpecificStrategy = comboStrategies[modelStr]?.fallbackStrategy;
-      const comboStrategy = comboSpecificStrategy || chatSettings.comboStrategy || "fallback";
+      const comboStrategy = comboSpecificStrategy || chatSettings.comboStrategy || "fill-first";
       
+      if (comboStrategy === "fallback") comboStrategy = "fill-first";
       const comboStickyLimit = chatSettings.comboStickyRoundRobinLimit;
       log.info("CHAT", `Combo "${modelStr}" with ${comboModels.length} models (strategy: ${comboStrategy}, sticky: ${comboStickyLimit})`);
       return handleComboChat({
@@ -165,6 +167,8 @@ async function handleSingleModelChat(body, modelStr, clientRawRequest = null, re
   let lastError = null;
   let lastStatus = null;
   let totalCredentialWaitMs = 0;
+  // Pipeline cache — computed once, reused across account fallback
+  const pipelineCache = {};
 
   while (true) {
     const credentials = await getProviderCredentials(provider, excludeConnectionIds, model);
@@ -198,17 +202,29 @@ async function handleSingleModelChat(body, modelStr, clientRawRequest = null, re
 
     // Ensure real project ID is available for providers that need it (P0 fix: cold miss)
     if ((provider === "antigravity" || provider === "gemini-cli") && !refreshedCredentials.projectId) {
-      const pid = await getProjectIdForConnection(credentials.connectionId, refreshedCredentials.accessToken);
+      // Race fetch against timeout — don't block request for >5s on cold cache
+      const pid = await Promise.race([
+        getProjectIdForConnection(credentials.connectionId, refreshedCredentials.accessToken),
+        new Promise(resolve => setTimeout(() => resolve(null), 5000)),
+      ]);
       if (pid) {
         refreshedCredentials.projectId = pid;
         // Persist to DB in background so subsequent requests have it immediately
         updateProviderCredentials(credentials.connectionId, { projectId: pid }).catch(() => { });
+      } else {
+        // Background fetch — persist for next request
+        getProjectIdForConnection(credentials.connectionId, refreshedCredentials.accessToken).then(realPid => {
+          if (realPid) {
+            updateProviderCredentials(credentials.connectionId, { projectId: realPid }).catch(() => { });
+          }
+        }).catch(() => {});
       }
     }
 
     // Use shared chatCore
     const chatSettings = await getSettings();
     const providerThinking = (chatSettings.providerThinking || {})[provider] || null;
+    const pipeCache = pipelineCache.translatedBody ? pipelineCache : null;
     const result = await handleChatCore({
       body: { ...body, model: `${provider}/${model}` },
       modelInfo: { provider, model },
@@ -225,6 +241,8 @@ async function handleSingleModelChat(body, modelStr, clientRawRequest = null, re
       providerThinking,
       // Detect source format by endpoint + body
       sourceFormatOverride: request?.url ? detectFormatByEndpoint(new URL(request.url).pathname, body) : null,
+      pipelineCache: pipeCache,
+      _pipelineCacheOut: pipeCache ? null : pipelineCache,
       onCredentialsRefreshed: async (newCreds) => {
         await updateProviderCredentials(credentials.connectionId, {
           ...newCreds,

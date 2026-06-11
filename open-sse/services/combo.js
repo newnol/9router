@@ -11,6 +11,12 @@ import { unavailableResponse } from "../utils/error.js";
  */
 const comboRotationState = new Map();
 
+/**
+ * Track usage count per combo model (for least-concurrency strategy)
+ * @type {Map<string, number>}
+ */
+const comboModelUsage = new Map();
+
 function normalizeStickyLimit(stickyLimit) {
   const parsed = Number.parseInt(stickyLimit, 10);
   return Number.isFinite(parsed) && parsed > 0 ? parsed : 1;
@@ -25,43 +31,101 @@ function rotateModelsFromIndex(models, currentIndex) {
   return rotatedModels;
 }
 
+function getUsageKey(comboName, model) {
+  return `${comboName || "__default__"}:${model}`;
+}
+
+function getModelUsage(comboName, model) {
+  return comboModelUsage.get(getUsageKey(comboName, model)) || 0;
+}
+
+function incrementModelUsage(comboName, model) {
+  const key = getUsageKey(comboName, model);
+  const count = (comboModelUsage.get(key) || 0) + 1;
+  comboModelUsage.set(key, count);
+  return count;
+}
+
 /**
- * Get rotated model list based on strategy
+ * Get ordered model list based on strategy
  * @param {string[]} models - Array of model strings
  * @param {string} comboName - Name of the combo
- * @param {string} strategy - "fallback" or "round-robin"
- * @param {number|string} [stickyLimit=1] - Requests per combo model before switching
- * @returns {string[]} Rotated models array
+ * @param {string} strategy - "fill-first", "fallback", "round-robin", "least-concurrency", "weighted-round-robin", "smart"
+ * @param {number|string} [stickyLimit=1] - Requests per combo model before switching (round-robin only)
+ * @returns {string[]} Ordered models array
  */
 export function getRotatedModels(models, comboName, strategy, stickyLimit = 1) {
-  if (!models || models.length <= 1 || strategy !== "round-robin") {
-    return models;
+  if (!models || models.length <= 1) return models;
+
+  switch (strategy) {
+    case "fill-first":
+    case "fallback":
+      return models;
+
+    case "round-robin": {
+      const rotationKey = comboName || "__default__";
+      const normalizedStickyLimit = normalizeStickyLimit(stickyLimit);
+      const existingState = comboRotationState.get(rotationKey);
+      const state = typeof existingState === "number"
+        ? { index: existingState, consecutiveUseCount: 0 }
+        : (existingState || { index: 0, consecutiveUseCount: 0 });
+
+      const currentIndex = state.index % models.length;
+      const rotatedModels = rotateModelsFromIndex(models, currentIndex);
+      const nextUseCount = state.consecutiveUseCount + 1;
+
+      if (nextUseCount >= normalizedStickyLimit) {
+        comboRotationState.set(rotationKey, {
+          index: (currentIndex + 1) % models.length,
+          consecutiveUseCount: 0,
+        });
+      } else {
+        comboRotationState.set(rotationKey, {
+          index: currentIndex,
+          consecutiveUseCount: nextUseCount,
+        });
+      }
+
+      return rotatedModels;
+    }
+
+    case "least-concurrency": {
+      // Sort by usage count ascending (least tried first)
+      return [...models].sort((a, b) => {
+        const aUsage = getModelUsage(comboName, a);
+        const bUsage = getModelUsage(comboName, b);
+        if (aUsage !== bUsage) return aUsage - bUsage;
+        return 0;
+      });
+    }
+
+    case "weighted-round-robin": {
+      // Weighted random — equal weights = uniform random
+      const totalWeight = models.reduce((sum, _, i) => sum + 1, 0);
+      let roll = Math.random() * totalWeight;
+      for (let i = 0; i < models.length; i++) {
+        roll -= 1;
+        if (roll <= 0) {
+          // Put chosen model first, rest in original order
+          const result = [models[i], ...models.slice(0, i), ...models.slice(i + 1)];
+          return result;
+        }
+      }
+      return models;
+    }
+
+    case "smart":
+      // Smart for combo: prefer models that have been tried fewer times (least-concurrency)
+      return [...models].sort((a, b) => {
+        const aUsage = getModelUsage(comboName, a);
+        const bUsage = getModelUsage(comboName, b);
+        if (aUsage !== bUsage) return aUsage - bUsage;
+        return 0;
+      });
+
+    default:
+      return models;
   }
-
-  const rotationKey = comboName || "__default__";
-  const normalizedStickyLimit = normalizeStickyLimit(stickyLimit);
-  const existingState = comboRotationState.get(rotationKey);
-  const state = typeof existingState === "number"
-    ? { index: existingState, consecutiveUseCount: 0 }
-    : (existingState || { index: 0, consecutiveUseCount: 0 });
-
-  const currentIndex = state.index % models.length;
-  const rotatedModels = rotateModelsFromIndex(models, currentIndex);
-  const nextUseCount = state.consecutiveUseCount + 1;
-
-  if (nextUseCount >= normalizedStickyLimit) {
-    comboRotationState.set(rotationKey, {
-      index: (currentIndex + 1) % models.length,
-      consecutiveUseCount: 0,
-    });
-  } else {
-    comboRotationState.set(rotationKey, {
-      index: currentIndex,
-      consecutiveUseCount: nextUseCount,
-    });
-  }
-
-  return rotatedModels;
 }
 
 /**
@@ -69,8 +133,16 @@ export function getRotatedModels(models, comboName, strategy, stickyLimit = 1) {
  * @param {string} [comboName] - Combo name to reset; omit to clear all
  */
 export function resetComboRotation(comboName) {
-  if (comboName) comboRotationState.delete(comboName);
-  else comboRotationState.clear();
+  if (comboName) {
+    comboRotationState.delete(comboName);
+    // Clear usage for all models under this combo
+    for (const [key] of comboModelUsage) {
+      if (key.startsWith(`${comboName}:`)) comboModelUsage.delete(key);
+    }
+  } else {
+    comboRotationState.clear();
+    comboModelUsage.clear();
+  }
 }
 
 /**
@@ -101,23 +173,30 @@ export function getComboModelsFromData(modelStr, combosData) {
  * @param {Function} options.handleSingleModel - Function to handle single model: (body, modelStr) => Promise<Response>
  * @param {Object} options.log - Logger object
  * @param {string} [options.comboName] - Name of the combo (for round-robin tracking)
- * @param {string} [options.comboStrategy] - Strategy: "fallback" or "round-robin"
- * @param {number|string} [options.comboStickyLimit=1] - Requests per combo model before switching
+ * @param {string} [options.comboStrategy] - Strategy: "fill-first", "fallback", "round-robin", "least-concurrency", "weighted-round-robin", "smart"
+ * @param {number|string} [options.comboStickyLimit=1] - Requests per combo model before switching (round-robin only)
  * @returns {Promise<Response>}
  */
 export async function handleComboChat({ body, models, handleSingleModel, log, comboName, comboStrategy, comboStickyLimit = 1 }) {
-  // Apply rotation strategy if enabled
-  const rotatedModels = getRotatedModels(models, comboName, comboStrategy, comboStickyLimit);
+  // Normalize strategy name
+  if (comboStrategy === "fallback") comboStrategy = "fill-first";
+  // Apply rotation/ordering strategy
+  const sortedModels = getRotatedModels(models, comboName, comboStrategy, comboStickyLimit);
   
   let lastError = null;
   let earliestRetryAfter = null;
   let lastStatus = null;
 
-  for (let i = 0; i < rotatedModels.length; i++) {
-    const modelStr = rotatedModels[i];
-    log.info("COMBO", `Trying model ${i + 1}/${rotatedModels.length}: ${modelStr}`);
+  for (let i = 0; i < sortedModels.length; i++) {
+    const modelStr = sortedModels[i];
+    log.info("COMBO", `Trying model ${i + 1}/${sortedModels.length}: ${modelStr}`);
 
     try {
+      // Track model usage for least-concurrency strategy
+      if (comboStrategy === "least-concurrency" || comboStrategy === "smart") {
+        incrementModelUsage(comboName, modelStr);
+      }
+
       const result = await handleSingleModel(body, modelStr);
       
       // Success (2xx) - return response

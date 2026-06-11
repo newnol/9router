@@ -12,7 +12,7 @@ const DEFAULT_SETTINGS = {
   tailscaleUrl: "",
   stickyRoundRobinLimit: 3,
   providerStrategies: {},
-  comboStrategy: "fallback",
+  comboStrategy: "fill-first",
   comboStickyRoundRobinLimit: 1,
   comboStrategies: {},
   requireLogin: true,
