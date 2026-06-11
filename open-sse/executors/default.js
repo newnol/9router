@@ -30,7 +30,11 @@ export class DefaultExecutor extends BaseExecutor {
 
   applyProviderDefaults(model, body) {
     if (this.provider === "groq") {
-      return { ...body, reasoning_format: "hidden" };
+      // Only add reasoning_format for models that support reasoning on Groq
+      const groqReasoningModels = new Set(["qwen/qwen3-32b"]);
+      if (groqReasoningModels.has(model)) {
+        return { ...body, reasoning_format: "hidden" };
+      }
     }
     return body;
   }
