@@ -97,7 +97,7 @@ export async function handleChat(request, clientRawRequest = null) {
     // Check for combo-specific strategy first, fallback to global
     const comboStrategies = settings.comboStrategies || {};
     const comboSpecificStrategy = comboStrategies[modelStr]?.fallbackStrategy;
-    const comboStrategy = comboSpecificStrategy || settings.comboStrategy || "fallback";
+    let comboStrategy = comboSpecificStrategy || settings.comboStrategy || "fallback";
     
     if (comboStrategy === "fallback") comboStrategy = "fill-first";
     const comboStickyLimit = settings.comboStickyRoundRobinLimit;
@@ -131,7 +131,7 @@ async function handleSingleModelChat(body, modelStr, clientRawRequest = null, re
       // Check for combo-specific strategy first, fallback to global
       const comboStrategies = chatSettings.comboStrategies || {};
       const comboSpecificStrategy = comboStrategies[modelStr]?.fallbackStrategy;
-      const comboStrategy = comboSpecificStrategy || chatSettings.comboStrategy || "fill-first";
+      let comboStrategy = comboSpecificStrategy || chatSettings.comboStrategy || "fill-first";
       
       if (comboStrategy === "fallback") comboStrategy = "fill-first";
       const comboStickyLimit = chatSettings.comboStickyRoundRobinLimit;
