@@ -96,6 +96,10 @@ import p93 from "./xai.js";
 import p94 from "./xiaomi-mimo.js";
 import p95 from "./xiaomi-tokenplan.js";
 import p96 from "./youcom.js";
+import p97 from "./bluesminds.js";
+import p98 from "./digitalocean.js";
+import p99 from "./freemodel.js";
+import p100 from "./freemodel-cc.js";
 
 export default [
   p0,
@@ -194,5 +198,9 @@ export default [
   p93,
   p94,
   p95,
-  p96
+  p96,
+  p97,
+  p98,
+  p99,
+  p100
 ];
