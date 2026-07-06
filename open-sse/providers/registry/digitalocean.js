@@ -2,6 +2,9 @@ export default {
   id: "digitalocean",
   priority: 80,
   alias: "digitalocean",
+  aliases: [
+    "do",
+  ],
   uiAlias: "do",
   display: {
     name: "DigitalOcean",
@@ -10,6 +13,7 @@ export default {
     textIcon: "DO",
     website: "https://docs.digitalocean.com/products/ai-platform/",
     notice: {
+      text: "Use a DigitalOcean Personal Access Token (dop_v1_...) or a Model Access Key from the Inference console. OAuth tokens (doo_v1_...) may not have the required scopes.",
       apiKeyUrl: "https://cloud.digitalocean.com/account/api/tokens",
     },
   },
