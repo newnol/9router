@@ -100,6 +100,7 @@ import p97 from "./bluesminds.js";
 import p98 from "./digitalocean.js";
 import p99 from "./freemodel.js";
 import p100 from "./freemodel-cc.js";
+import p101 from "./opencode-zen.js";
 
 export default [
   p0,
@@ -202,5 +203,6 @@ export default [
   p97,
   p98,
   p99,
-  p100
+  p100,
+  p101
 ];
