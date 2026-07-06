@@ -85,8 +85,22 @@ export async function parseUpstreamError(response, executor = null) {
   const messageStr = typeof message === "string" ? message : JSON.stringify(message);
   const finalMessage = messageStr || DEFAULT_ERROR_MESSAGES[response.status] || `Upstream error: ${response.status}`;
 
-  return { statusCode: response.status, message: finalMessage };
-}
+  // Parse Retry-After header from upstream response
+  let resetsAtMs;
+  const retryAfter = response.headers?.get("retry-after");
+  if (retryAfter) {
+    const parsed = parseInt(retryAfter, 10);
+    if (!isNaN(parsed) && parsed > 0) {
+      resetsAtMs = Date.now() + parsed * 1000;
+    } else {
+      const dateParsed = new Date(retryAfter).getTime();
+      if (!isNaN(dateParsed) && dateParsed > Date.now()) {
+        resetsAtMs = dateParsed;
+      }
+    }
+  }
+
+  return { statusCode: response.status, message: finalMessage, resetsAtMs };
 
 /**
  * Create error result for chatCore handler

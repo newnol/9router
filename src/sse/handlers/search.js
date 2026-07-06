@@ -5,11 +5,10 @@ import {
   extractApiKey,
   isValidApiKey,
 } from "../services/auth.js";
-import { getSettings, getCombos } from "@/lib/localDb";
+import { decrementInFlight } from "open-sse/services/inFlightTracker.js";
 import { AI_PROVIDERS, resolveProviderId } from "@/shared/constants/providers.js";
 import { handleSearchCore } from "open-sse/handlers/search/index.js";
-import { errorResponse, unavailableResponse } from "open-sse/utils/error.js";
-import { HTTP_STATUS } from "open-sse/config/runtimeConfig.js";
+import { waitForAvailableCredentials } from "open-sse/services/accountFallback.js";
 import * as log from "../utils/logger.js";
 import { updateProviderCredentials, checkAndRefreshToken } from "../services/tokenRefresh.js";
 import { handleComboChat, getComboModelsFromData } from "open-sse/services/combo.js";
@@ -147,20 +146,15 @@ async function handleSingleProviderSearch(body, providerInput, request, apiKey, 
   const excludeConnectionIds = new Set();
   let lastError = null;
   let lastStatus = null;
-
-  while (true) {
-    const credentials = await getProviderCredentials(providerId, excludeConnectionIds);
+  let totalCredentialWaitMs = 0;
 
     if (!credentials || credentials.allRateLimited) {
       if (credentials?.allRateLimited) {
-        const errorMsg = lastError || credentials.lastError || "Unavailable";
-        const status = lastStatus || Number(credentials.lastErrorCode) || HTTP_STATUS.SERVICE_UNAVAILABLE;
-        log.warn("SEARCH", `[${providerId}] ${errorMsg} (${credentials.retryAfterHuman})`);
-        return unavailableResponse(status, `[${providerId}] ${errorMsg}`, credentials.retryAfter, credentials.retryAfterHuman);
-      }
-      if (excludeConnectionIds.size === 0) {
-        log.error("AUTH", `No credentials for provider: ${providerId}`);
-        return errorResponse(HTTP_STATUS.BAD_REQUEST, `No credentials for provider: ${providerId}`);
+        const queued = await waitForAvailableCredentials(credentials, providerId, null, log, totalCredentialWaitMs);
+        if (queued) {
+          totalCredentialWaitMs = queued.totalWaitedMs;
+          continue;
+        }
       }
       log.warn("SEARCH", "No more accounts available", { provider: providerId });
       return errorResponse(lastStatus || HTTP_STATUS.SERVICE_UNAVAILABLE, lastError || "All accounts unavailable");
@@ -189,17 +183,8 @@ async function handleSingleProviderSearch(body, providerInput, request, apiKey, 
       }
     });
 
-    if (result.success) return result.response;
+    decrementInFlight(credentials.connectionId);
 
-    const { shouldFallback } = await markAccountUnavailable(credentials.connectionId, result.status, result.error, providerId);
-
-    if (shouldFallback) {
-      log.warn("AUTH", `Account ${credentials.connectionName} unavailable (${result.status}), trying fallback`);
-      excludeConnectionIds.add(credentials.connectionId);
-      lastError = result.error;
-      lastStatus = result.status;
-      continue;
-    }
 
     return result.response;
   }

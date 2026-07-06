@@ -2,11 +2,10 @@ import {
   extractApiKey, isValidApiKey,
   getProviderCredentials, markAccountUnavailable,
 } from "../services/auth.js";
-import { getSettings } from "@/lib/localDb";
+import { decrementInFlight } from "open-sse/services/inFlightTracker.js";
 import { getModelInfo, getComboModels } from "../services/model.js";
 import { handleTtsCore } from "open-sse/handlers/ttsCore.js";
-import { errorResponse, unavailableResponse } from "open-sse/utils/error.js";
-import { HTTP_STATUS } from "open-sse/config/runtimeConfig.js";
+import { waitForAvailableCredentials } from "open-sse/services/accountFallback.js";
 import { AI_PROVIDERS } from "@/shared/constants/providers";
 import { handleComboChat } from "open-sse/services/combo.js";
 import * as log from "../utils/logger.js";
@@ -82,33 +81,19 @@ async function handleSingleModelTts(body, modelStr, responseFormat, language) {
   const excludeConnectionIds = new Set();
   let lastError = null;
   let lastStatus = null;
-
-  while (true) {
-    const credentials = await getProviderCredentials(provider, excludeConnectionIds, model);
+  let totalCredentialWaitMs = 0;
 
     if (!credentials || credentials.allRateLimited) {
       if (credentials?.allRateLimited) {
-        const msg = lastError || credentials.lastError || "Unavailable";
-        const status = lastStatus || Number(credentials.lastErrorCode) || HTTP_STATUS.SERVICE_UNAVAILABLE;
-        return unavailableResponse(status, `[${provider}/${model}] ${msg}`, credentials.retryAfter, credentials.retryAfterHuman);
-      }
-      if (excludeConnectionIds.size === 0) return errorResponse(HTTP_STATUS.BAD_REQUEST, `No credentials for provider: ${provider}`);
-      return errorResponse(lastStatus || HTTP_STATUS.SERVICE_UNAVAILABLE, lastError || "All accounts unavailable");
-    }
-
+        const queued = await waitForAvailableCredentials(credentials, provider, model, log, totalCredentialWaitMs);
+        if (queued) {
+          totalCredentialWaitMs = queued.totalWaitedMs;
+          continue;
+        }
     log.info("AUTH", `\x1b[32mUsing ${provider} account: ${credentials.connectionName}\x1b[0m`);
 
     const result = await handleTtsCore({ provider, model, input: body.input, credentials, responseFormat, language });
 
-    if (result.success) return result.response;
+    decrementInFlight(credentials.connectionId);
 
-    const { shouldFallback } = await markAccountUnavailable(credentials.connectionId, result.status, result.error, provider, model);
-    if (shouldFallback) {
-      excludeConnectionIds.add(credentials.connectionId);
-      lastError = result.error;
-      lastStatus = result.status;
-      continue;
-    }
-    return result.response || errorResponse(result.status, result.error);
-  }
 }
