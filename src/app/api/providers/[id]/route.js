@@ -134,6 +134,15 @@ export async function PUT(request, { params }) {
     if (maxConcurrent !== undefined) updateData.maxConcurrent = maxConcurrent;
     if (maxRpm !== undefined) updateData.maxRpm = maxRpm;
     if (maxTpm !== undefined) updateData.maxTpm = maxTpm;
+
+    if (
+      shouldMergeProviderSpecificData(
+        existing.providerSpecificData,
+        providerSpecificData,
+        proxyConfig.hasAnyProxyField,
+        proxyPoolResult.hasProxyPoolField
+      )
+    ) {
       updateData.providerSpecificData = {
         ...(existing.providerSpecificData || {}),
         ...(providerSpecificData || {}),

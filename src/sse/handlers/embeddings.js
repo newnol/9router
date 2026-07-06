@@ -6,9 +6,12 @@ import {
   isValidApiKey,
 } from "../services/auth.js";
 import { decrementInFlight } from "open-sse/services/inFlightTracker.js";
+import { getSettings } from "@/lib/localDb";
 import { getModelInfo } from "../services/model.js";
 import { handleEmbeddingsCore } from "open-sse/handlers/embeddingsCore.js";
 import { waitForAvailableCredentials } from "open-sse/services/accountFallback.js";
+import { errorResponse, unavailableResponse } from "open-sse/utils/error.js";
+import { HTTP_STATUS } from "open-sse/config/runtimeConfig.js";
 import * as log from "../utils/logger.js";
 import { updateProviderCredentials, checkAndRefreshToken } from "../services/tokenRefresh.js";
 
@@ -84,6 +87,9 @@ export async function handleEmbeddings(request) {
   let lastStatus = null;
   let totalCredentialWaitMs = 0;
 
+  while (true) {
+    const credentials = await getProviderCredentials(provider, excludeConnectionIds, model);
+
     // All accounts unavailable
     if (!credentials || credentials.allRateLimited) {
       if (credentials?.allRateLimited) {
@@ -92,6 +98,14 @@ export async function handleEmbeddings(request) {
           totalCredentialWaitMs = queued.totalWaitedMs;
           continue;
         }
+        const errorMsg = lastError || credentials.lastError || "Unavailable";
+        const status = lastStatus || Number(credentials.lastErrorCode) || HTTP_STATUS.SERVICE_UNAVAILABLE;
+        log.warn("EMBEDDINGS", `[${provider}/${model}] ${errorMsg} (${credentials.retryAfterHuman})`);
+        return unavailableResponse(status, `[${provider}/${model}] ${errorMsg}`, credentials.retryAfter, credentials.retryAfterHuman);
+      }
+      if (excludeConnectionIds.size === 0) {
+        log.error("AUTH", `No credentials for provider: ${provider}`);
+        return errorResponse(HTTP_STATUS.BAD_REQUEST, `No credentials for provider: ${provider}`);
       }
       log.warn("EMBEDDINGS", "No more accounts available", { provider });
       return errorResponse(lastStatus || HTTP_STATUS.SERVICE_UNAVAILABLE, lastError || "All accounts unavailable");
@@ -120,6 +134,17 @@ export async function handleEmbeddings(request) {
 
     decrementInFlight(credentials.connectionId);
 
+    if (result.success) return result.response;
+
+    const { shouldFallback } = await markAccountUnavailable(credentials.connectionId, result.status, result.error, provider, model);
+
+    if (shouldFallback) {
+      log.warn("AUTH", `Account ${credentials.connectionName} unavailable (${result.status}), trying fallback`);
+      excludeConnectionIds.add(credentials.connectionId);
+      lastError = result.error;
+      lastStatus = result.status;
+      continue;
+    }
 
     return result.response;
   }

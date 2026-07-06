@@ -5,15 +5,16 @@ import {
   extractApiKey,
   isValidApiKey,
 } from "../services/auth.js";
+import { decrementInFlight } from "open-sse/services/inFlightTracker.js";
 import { getSettings, getCombos } from "@/lib/localDb";
 import { AI_PROVIDERS, resolveProviderId } from "@/shared/constants/providers.js";
 import { handleFetchCore } from "open-sse/handlers/fetch/index.js";
+import { waitForAvailableCredentials } from "open-sse/services/accountFallback.js";
 import { errorResponse, unavailableResponse } from "open-sse/utils/error.js";
 import { HTTP_STATUS } from "open-sse/config/runtimeConfig.js";
 import * as log from "../utils/logger.js";
 import { updateProviderCredentials, checkAndRefreshToken } from "../services/tokenRefresh.js";
 import { handleComboChat, getComboModelsFromData } from "open-sse/services/combo.js";
-import { assertPublicUrl } from "@/shared/utils/ssrfGuard.js";
 
 /**
  * Handle web fetch (URL extraction) request for the SSE/Next.js server.
@@ -77,14 +78,6 @@ export async function handleFetch(request) {
   } catch {
     log.warn("FETCH", "Invalid URL", { url: targetUrl });
     return errorResponse(HTTP_STATUS.BAD_REQUEST, "Invalid URL format");
-  }
-
-  // SSRF guard: reject internal/private/metadata targets
-  try {
-    assertPublicUrl(targetUrl);
-  } catch (err) {
-    log.warn("FETCH", "Blocked URL", { url: targetUrl });
-    return errorResponse(HTTP_STATUS.BAD_REQUEST, err.message);
   }
 
   // Combo expansion: providerInput may be a combo name → run fallback/round-robin across providers
@@ -157,12 +150,18 @@ async function handleSingleProviderFetch(body, providerInput, request, apiKey, s
   const excludeConnectionIds = new Set();
   let lastError = null;
   let lastStatus = null;
+  let totalCredentialWaitMs = 0;
 
   while (true) {
     const credentials = await getProviderCredentials(providerId, excludeConnectionIds);
 
     if (!credentials || credentials.allRateLimited) {
       if (credentials?.allRateLimited) {
+        const queued = await waitForAvailableCredentials(credentials, providerId, null, log, totalCredentialWaitMs);
+        if (queued) {
+          totalCredentialWaitMs = queued.totalWaitedMs;
+          continue;
+        }
         const errorMsg = lastError || credentials.lastError || "Unavailable";
         const status = lastStatus || Number(credentials.lastErrorCode) || HTTP_STATUS.SERVICE_UNAVAILABLE;
         log.warn("FETCH", `[${providerId}] ${errorMsg} (${credentials.retryAfterHuman})`);
@@ -200,6 +199,8 @@ async function handleSingleProviderFetch(body, providerInput, request, apiKey, s
         await clearAccountError(credentials.connectionId, credentials);
       }
     });
+
+    decrementInFlight(credentials.connectionId);
 
     if (result.success) {
       return new Response(JSON.stringify(result.data), {

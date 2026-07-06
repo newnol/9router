@@ -101,6 +101,7 @@ export async function parseUpstreamError(response, executor = null) {
   }
 
   return { statusCode: response.status, message: finalMessage, resetsAtMs };
+}
 
 /**
  * Create error result for chatCore handler

@@ -6,9 +6,12 @@ import {
   isValidApiKey,
 } from "../services/auth.js";
 import { decrementInFlight } from "open-sse/services/inFlightTracker.js";
+import { getSettings } from "@/lib/localDb";
 import { getModelInfo, getComboModels } from "../services/model.js";
 import { handleImageGenerationCore } from "open-sse/handlers/imageGenerationCore.js";
 import { waitForAvailableCredentials } from "open-sse/services/accountFallback.js";
+import { errorResponse, unavailableResponse } from "open-sse/utils/error.js";
+import { HTTP_STATUS } from "open-sse/config/runtimeConfig.js";
 import { updateProviderCredentials, checkAndRefreshToken } from "../services/tokenRefresh.js";
 import { handleComboChat } from "open-sse/services/combo.js";
 import * as log from "../utils/logger.js";
@@ -90,6 +93,9 @@ async function handleSingleModelImage(body, modelStr, { wantsStream, binaryOutpu
   let lastStatus = null;
   let totalCredentialWaitMs = 0;
 
+  while (true) {
+    const credentials = await getProviderCredentials(provider, excludeConnectionIds, model, { preferredConnectionId });
+
     if (!credentials || credentials.allRateLimited) {
       if (credentials?.allRateLimited) {
         const queued = await waitForAvailableCredentials(credentials, provider, model, log, totalCredentialWaitMs);
@@ -97,6 +103,14 @@ async function handleSingleModelImage(body, modelStr, { wantsStream, binaryOutpu
           totalCredentialWaitMs = queued.totalWaitedMs;
           continue;
         }
+        const errorMsg = lastError || credentials.lastError || "Unavailable";
+        const status = lastStatus || Number(credentials.lastErrorCode) || HTTP_STATUS.SERVICE_UNAVAILABLE;
+        return unavailableResponse(status, `[${provider}/${model}] ${errorMsg}`, credentials.retryAfter, credentials.retryAfterHuman);
+      }
+      if (excludeConnectionIds.size === 0) {
+        return errorResponse(HTTP_STATUS.BAD_REQUEST, `No credentials for provider: ${provider}`);
+      }
+      return errorResponse(lastStatus || HTTP_STATUS.SERVICE_UNAVAILABLE, lastError || "All accounts unavailable");
     }
 
     const refreshedCredentials = await checkAndRefreshToken(provider, credentials);
@@ -121,6 +135,17 @@ async function handleSingleModelImage(body, modelStr, { wantsStream, binaryOutpu
     });
 
     decrementInFlight(credentials.connectionId);
+
+    if (result.success) return result.response;
+
+    const { shouldFallback } = await markAccountUnavailable(credentials.connectionId, result.status, result.error, provider, model);
+
+    if (shouldFallback) {
+      excludeConnectionIds.add(credentials.connectionId);
+      lastError = result.error;
+      lastStatus = result.status;
+      continue;
+    }
 
     return result.response;
   }

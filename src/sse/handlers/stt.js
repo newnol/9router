@@ -2,9 +2,11 @@ import {
   extractApiKey, isValidApiKey,
   getProviderCredentials, markAccountUnavailable,
 } from "../services/auth.js";
+import { decrementInFlight } from "open-sse/services/inFlightTracker.js";
 import { getSettings } from "@/lib/localDb";
 import { getModelInfo } from "../services/model.js";
 import { handleSttCore } from "open-sse/handlers/sttCore.js";
+import { waitForAvailableCredentials } from "open-sse/services/accountFallback.js";
 import { errorResponse, unavailableResponse } from "open-sse/utils/error.js";
 import { HTTP_STATUS } from "open-sse/config/runtimeConfig.js";
 import { AI_PROVIDERS } from "@/shared/constants/providers";
@@ -47,7 +49,7 @@ export async function handleStt(request) {
 
   // noAuth providers
   if (!CREDENTIALED_PROVIDERS.has(provider)) {
-    const result = await handleSttCore({ provider, model, formData, sttConfig: AI_PROVIDERS[provider]?.sttConfig });
+    const result = await handleSttCore({ provider, model, formData });
     if (result.success) return result.response;
     return errorResponse(result.status || HTTP_STATUS.BAD_GATEWAY, result.error || "STT failed");
   }
@@ -56,12 +58,18 @@ export async function handleStt(request) {
   const excludeConnectionIds = new Set();
   let lastError = null;
   let lastStatus = null;
+  let totalCredentialWaitMs = 0;
 
   while (true) {
     const credentials = await getProviderCredentials(provider, excludeConnectionIds, model);
 
     if (!credentials || credentials.allRateLimited) {
       if (credentials?.allRateLimited) {
+        const queued = await waitForAvailableCredentials(credentials, provider, model, log, totalCredentialWaitMs);
+        if (queued) {
+          totalCredentialWaitMs = queued.totalWaitedMs;
+          continue;
+        }
         const msg = lastError || credentials.lastError || "Unavailable";
         const status = lastStatus || Number(credentials.lastErrorCode) || HTTP_STATUS.SERVICE_UNAVAILABLE;
         return unavailableResponse(status, `[${provider}/${model}] ${msg}`, credentials.retryAfter, credentials.retryAfterHuman);
@@ -72,7 +80,9 @@ export async function handleStt(request) {
 
     log.info("AUTH", `\x1b[32mUsing ${provider} account: ${credentials.connectionName}\x1b[0m`);
 
-    const result = await handleSttCore({ provider, model, formData, credentials, sttConfig: AI_PROVIDERS[provider]?.sttConfig });
+    const result = await handleSttCore({ provider, model, formData, credentials });
+
+    decrementInFlight(credentials.connectionId);
 
     if (result.success) return result.response;
 
