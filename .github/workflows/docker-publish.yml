@@ -4,6 +4,8 @@ on:
   push:
     branches:
       - master
+    tags:
+      - "v*"
   workflow_dispatch:
 
 env:
@@ -45,10 +47,17 @@ jobs:
           tags: |
             type=semver,pattern={{version}}
             type=raw,value=master,enable={{is_default_branch}}
+            type=raw,value=latest,enable={{is_default_branch}}
+
+      - name: Build and push
         uses: docker/build-push-action@v6
         with:
           context: .
           push: true
           platforms: linux/amd64
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=registry,ref=${{ env.GHCR_IMAGE }}:buildcache
+          cache-to: type=registry,ref=${{ env.GHCR_IMAGE }}:buildcache,mode=max
           provenance: false
           sbom: false
