@@ -72,36 +72,37 @@ import p69 from "./opencode.js";
 import p70 from "./openrouter.js";
 import p71 from "./perplexity-web.js";
 import p72 from "./perplexity.js";
-import p73 from "./playht.js";
-import p74 from "./qoder.js";
-import p75 from "./qwen.js";
-import p76 from "./recraft.js";
-import p77 from "./runwayml.js";
-import p78 from "./sdwebui.js";
-import p79 from "./searchapi.js";
-import p80 from "./searxng.js";
-import p81 from "./serper.js";
-import p82 from "./siliconflow.js";
-import p83 from "./stability-ai.js";
-import p84 from "./tavily.js";
-import p85 from "./together.js";
-import p86 from "./topaz.js";
-import p87 from "./tortoise.js";
-import p88 from "./venice.js";
-import p89 from "./vercel-ai-gateway.js";
-import p90 from "./vertex-partner.js";
-import p91 from "./vertex.js";
-import p92 from "./volcengine-ark.js";
-import p93 from "./voyage-ai.js";
-import p94 from "./xai.js";
-import p95 from "./xiaomi-mimo.js";
-import p96 from "./xiaomi-tokenplan.js";
-import p97 from "./youcom.js";
-import p98 from "./bluesminds.js";
-import p99 from "./digitalocean.js";
-import p100 from "./freemodel.js";
-import p101 from "./freemodel-cc.js";
-import p102 from "./opencode-zen.js";
+import p73 from "./perplexity-agent.js";
+import p74 from "./playht.js";
+import p75 from "./qoder.js";
+import p76 from "./qwen.js";
+import p77 from "./recraft.js";
+import p78 from "./runwayml.js";
+import p79 from "./sdwebui.js";
+import p80 from "./searchapi.js";
+import p81 from "./searxng.js";
+import p82 from "./serper.js";
+import p83 from "./siliconflow.js";
+import p84 from "./stability-ai.js";
+import p85 from "./tavily.js";
+import p86 from "./together.js";
+import p87 from "./topaz.js";
+import p88 from "./tortoise.js";
+import p89 from "./venice.js";
+import p90 from "./vercel-ai-gateway.js";
+import p91 from "./vertex-partner.js";
+import p92 from "./vertex.js";
+import p93 from "./volcengine-ark.js";
+import p94 from "./voyage-ai.js";
+import p95 from "./xai.js";
+import p96 from "./xiaomi-mimo.js";
+import p97 from "./xiaomi-tokenplan.js";
+import p98 from "./youcom.js";
+import p99 from "./bluesminds.js";
+import p100 from "./digitalocean.js";
+import p101 from "./freemodel.js";
+import p102 from "./freemodel-cc.js";
+import p103 from "./opencode-zen.js";
 
 export default [
   p0,
@@ -206,5 +207,6 @@ export default [
   p99,
   p100,
   p101,
-  p102
+  p102,
+  p103
 ];
