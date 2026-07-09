@@ -1,0 +1,31 @@
+name: Sync Upstream Mirror
+
+on:
+  schedule:
+    - cron: "17 18 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  sync-upstream-master:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Configure Git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Sync upstream master into mirror branch
+        run: |
+          git remote add upstream https://github.com/decolua/9router.git
+          git fetch upstream master --prune
+          git branch -f upstream-master FETCH_HEAD
+          git push origin refs/heads/upstream-master --force
