@@ -1,4 +1,4 @@
-// Auto-generated: static imports of all registry entries
+// Auto-generated: static imports for all registry entries
 import p0 from "./alicode-intl.js";
 import p1 from "./alicode.js";
 import p2 from "./anthropic.js";
@@ -41,17 +41,17 @@ import p38 from "./glm-cn.js";
 import p39 from "./glm.js";
 import p40 from "./google-pse.js";
 import p41 from "./google-tts.js";
-import p42 from "./grok-web.js";
-import p43 from "./groq.js";
-import p44 from "./huggingface.js";
-import p45 from "./hyperbolic.js";
-import p46 from "./iflow.js";
-import p47 from "./inworld.js";
-import p48 from "./jina-ai.js";
-import p49 from "./jina-reader.js";
-import p50 from "./kilocode.js";
-import p51 from "./kimchi.js";
-import p52 from "./kimi-coding.js";
+import p42 from "./grok-cli.js";
+import p43 from "./grok-web.js";
+import p44 from "./groq.js";
+import p45 from "./huggingface.js";
+import p46 from "./hyperbolic.js";
+import p47 from "./iflow.js";
+import p48 from "./inworld.js";
+import p49 from "./jina-ai.js";
+import p50 from "./jina-reader.js";
+import p51 from "./kilocode.js";
+import p52 from "./kimchi.js";
 import p53 from "./kimi.js";
 import p54 from "./kiro.js";
 import p55 from "./linkup.js";
@@ -98,11 +98,12 @@ import p95 from "./xai.js";
 import p96 from "./xiaomi-mimo.js";
 import p97 from "./xiaomi-tokenplan.js";
 import p98 from "./youcom.js";
-import p99 from "./bluesminds.js";
-import p100 from "./digitalocean.js";
-import p101 from "./freemodel.js";
-import p102 from "./freemodel-cc.js";
-import p103 from "./opencode-zen.js";
+import p99 from "./alims-intl.js";
+import p100 from "./bluesminds.js";
+import p101 from "./digitalocean.js";
+import p102 from "./freemodel.js";
+import p103 from "./freemodel-cc.js";
+import p104 from "./opencode-zen.js";
 
 export default [
   p0,
@@ -208,5 +209,6 @@ export default [
   p100,
   p101,
   p102,
-  p103
+  p103,
+  p104
 ];

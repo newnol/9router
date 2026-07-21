@@ -1,80 +1,76 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useCallback, useEffect, useState } from "react";
 import PropTypes from "prop-types";
 import Card from "./Card";
-import Button from "./Button";
-import Badge from "./Badge";
 import Select from "./Select";
 
-export default function NoAuthProxyCard({ providerId }) {
-  const [connections, setConnections] = useState([]);
-  const [proxyPools, setProxyPools] = useState([]);
-  const [showForm, setShowForm] = useState(false);
-  const [newName, setNewName] = useState("");
-  const [newPoolId, setNewPoolId] = useState("__none__");
-  const [saving, setSaving] = useState(false);
-  const [deleting, setDeleting] = useState(null);
+const NONE_PROXY_POOL_VALUE = "__none__";
+const STRATEGIES = [
+  { value: "none", label: "None (single pool)" },
+  { value: "round-robin", label: "Round-robin" },
+  { value: "random", label: "Random" },
+];
 
-  const fetchData = useCallback(async () => {
-    const [connRes, poolRes] = await Promise.all([
-      fetch(`/api/providers`, { cache: "no-store" }),
-      fetch("/api/proxy-pools?isActive=true", { cache: "no-store" }),
-    ]);
-    if (connRes.ok) {
-      const data = await connRes.json();
-      setConnections((data.connections || []).filter(c => c.provider === providerId));
-    }
-    if (poolRes.ok) {
-      const data = await poolRes.json();
-      setProxyPools(data.proxyPools || []);
-    }
+export default function NoAuthProxyCard({ providerId }) {
+  const [proxyPoolId, setProxyPoolId] = useState(NONE_PROXY_POOL_VALUE);
+  const [rotateStrategy, setRotateStrategy] = useState("none");
+  const [proxyPools, setProxyPools] = useState([]);
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    Promise.all([
+      fetch("/api/proxy-pools?isActive=true", { cache: "no-store" }).then((r) => r.ok ? r.json() : { proxyPools: [] }),
+      fetch("/api/settings", { cache: "no-store" }).then((r) => r.ok ? r.json() : {}),
+    ]).then(([poolData, settingsData]) => {
+      if (cancelled) return;
+      setProxyPools(poolData.proxyPools || []);
+      const override = (settingsData.providerStrategies || {})[providerId] || {};
+      setProxyPoolId(override.proxyPoolId || NONE_PROXY_POOL_VALUE);
+      setRotateStrategy(override.rotateStrategy || "none");
+    }).catch(() => {});
+    return () => { cancelled = true; };
   }, [providerId]);
 
-  useEffect(() => { fetchData(); }, [fetchData]);
-
-  const handleAdd = async () => {
-    if (!newName || newPoolId === "__none__") return;
+  const save = useCallback(async (poolId, strategy) => {
     setSaving(true);
     try {
-      const res = await fetch("/api/providers", {
-        method: "POST",
+      const res = await fetch("/api/settings", { cache: "no-store" });
+      const data = res.ok ? await res.json() : {};
+      const current = data.providerStrategies || {};
+      const override = { ...(current[providerId] || {}) };
+      if (poolId === NONE_PROXY_POOL_VALUE) delete override.proxyPoolId;
+      else override.proxyPoolId = poolId;
+      if (strategy === "none") delete override.rotateStrategy;
+      else override.rotateStrategy = strategy;
+      const updated = { ...current };
+      if (Object.keys(override).length === 0) delete updated[providerId];
+      else updated[providerId] = override;
+      await fetch("/api/settings", {
+        method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          provider: providerId,
-          name: newName,
-          proxyPoolId: newPoolId,
-        }),
+        body: JSON.stringify({ providerStrategies: updated }),
       });
-      if (res.ok) {
-        setShowForm(false);
-        setNewName("");
-        setNewPoolId("__none__");
-        await fetchData();
-      }
     } catch (e) {
-      console.log("Error adding proxy connection:", e);
+      console.log("Save proxy config error:", e);
     } finally {
       setSaving(false);
     }
+  }, [providerId]);
+
+  const handlePoolChange = (newPoolId) => {
+    setProxyPoolId(newPoolId);
+    save(newPoolId, rotateStrategy);
   };
 
-  const handleDelete = async (connId) => {
-    setDeleting(connId);
-    try {
-      const res = await fetch(`/api/providers/${connId}`, { method: "DELETE" });
-      if (res.ok) await fetchData();
-    } catch (e) {
-      console.log("Error deleting proxy connection:", e);
-    } finally {
-      setDeleting(null);
-    }
+  const handleStrategyChange = (newStrategy) => {
+    setRotateStrategy(newStrategy);
+    save(proxyPoolId, newStrategy);
   };
 
-  const poolName = (poolId) => {
-    const pool = proxyPools.find(p => p.id === poolId);
-    return pool ? pool.name : poolId?.slice(0, 8) || "None";
-  };
+  const canRotate = proxyPools.length >= 2;
+  const isRotation = rotateStrategy !== "none";
 
   return (
     <Card>
@@ -90,78 +86,42 @@ export default function NoAuthProxyCard({ providerId }) {
         </div>
       </div>
 
-      {/* Existing proxy connections */}
-      {connections.length > 0 && (
-        <div className="mb-4 space-y-2">
-          {connections.map(conn => {
-            const poolId = conn.providerSpecificData?.proxyPoolId;
-            return (
-              <div key={conn.id} className="flex items-center justify-between gap-3 p-3 bg-sidebar/50 rounded-lg border border-border-subtle">
-                <div className="flex items-center gap-2 min-w-0">
-                  <span className="material-symbols-outlined text-[16px] text-text-muted">lan</span>
-                  <div className="flex flex-col min-w-0">
-                    <span className="text-sm font-medium truncate">{conn.name}</span>
-                    <span className="text-[11px] text-text-muted">
-                      Proxy: {poolId ? poolName(poolId) : "Direct"}
-                    </span>
-                  </div>
-                </div>
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  icon="close"
-                  onClick={() => handleDelete(conn.id)}
-                  disabled={deleting === conn.id}
-                />
-              </div>
-            );
-          })}
-        </div>
-      )}
+      <Select
+        label="Proxy Pool"
+        value={proxyPoolId}
+        onChange={(e) => handlePoolChange(e.target.value)}
+        disabled={saving || isRotation}
+        options={[
+          { value: NONE_PROXY_POOL_VALUE, label: "None (direct)" },
+          ...proxyPools.map((pool) => ({ value: pool.id, label: pool.name })),
+        ]}
+        hint={isRotation ? "Pool selector is ignored when rotation is active — all active pools are used." : undefined}
+      />
 
-      {/* Add form */}
-      {showForm ? (
-        <div className="p-3 bg-sidebar/50 rounded-lg border border-accent/20 space-y-3">
-          <input
-            type="text"
-            value={newName}
-            onChange={(e) => setNewName(e.target.value)}
-            placeholder="Connection name (e.g., Proxy #1)"
-            className="w-full px-3 py-2 text-sm border border-border rounded-md bg-background focus:outline-none focus:border-primary"
-          />
-          <Select
-            value={newPoolId}
-            onChange={(e) => setNewPoolId(e.target.value)}
-            options={[
-              { value: "__none__", label: "Select a proxy pool..." },
-              ...proxyPools.map(p => ({ value: p.id, label: p.name })),
-            ]}
-          />
-          <div className="flex gap-2">
-            <Button onClick={handleAdd} disabled={!newName || newPoolId === "__none__" || saving}>
-              {saving ? "Adding..." : "Add"}
-            </Button>
-            <Button variant="ghost" onClick={() => setShowForm(false)}>Cancel</Button>
-          </div>
-        </div>
-      ) : (
-        <Button
-          size="sm"
-          icon="add"
-          variant="secondary"
-          onClick={() => setShowForm(true)}
+      <div className="flex flex-col gap-2 mt-4">
+        <label className="text-sm font-medium text-text-main">Rotation Strategy</label>
+        <select
+          value={rotateStrategy}
+          onChange={(e) => handleStrategyChange(e.target.value)}
+          disabled={saving}
+          className="py-2 px-3 text-sm text-text-main bg-white dark:bg-white/5 border border-black/10 dark:border-white/10 rounded-md focus:ring-1 focus:ring-primary/30 focus:border-primary/50 focus:outline-none transition-all disabled:opacity-50"
         >
-          Add Proxy Connection
-        </Button>
-      )}
-
-      {connections.length > 1 && (
-        <div className="mt-3">
-          <Badge variant="info" size="sm">
-            {connections.length} proxy connections — routing will distribute across all
-          </Badge>
-        </div>
-      )}
+          {STRATEGIES.map((s) => (
+            <option key={s.value} value={s.value} disabled={s.value !== "none" && !canRotate}>
+              {s.label}
+            </option>
+          ))}
+        </select>
+        <p className="text-xs text-text-muted">
+          {!canRotate
+            ? `Need at least 2 active proxy pools for rotation.`
+            : isRotation
+              ? rotateStrategy === "round-robin"
+                ? `Rotating through all ${proxyPools.length} active pools in order. State is in-memory (resets on restart).`
+                : `Picking a random pool from ${proxyPools.length} active pools each request.`
+              : `Uses the selected pool above. Set to Round-robin or Random to rotate across all active pools.`}
+        </p>
+      </div>
     </Card>
   );
 }
